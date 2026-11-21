@@ -58,11 +58,11 @@ Kroshka — это альтернатива Telegram для дома: стави
 .\KroshkaServer.exe
 ```
 
-Или на Linux:
+Или на Linux — та же сборка, что и клиент, но без окна:
 
 ```bash
-tar -xzf kroshka-server-linux-x64.zip
-./KroshkaServer
+tar -xzf kroshka-linux-x64.tar.gz
+./kroshka --headless
 ```
 
 Сервер напишет в консоль свой адрес в сети:
@@ -278,7 +278,6 @@ build-linux.cmd test # 46 проверок Linux-клиента
 artifacts\kroshka-installer-win-x64...  — установщик (клиент + сервер)
 artifacts\kroshka-client-win-x64.zip    — клиент без установки
 artifacts\kroshka-server-win-x64.zip    — сервер для Windows
-artifacts\kroshka-server-linux-x64.zip  — сервер для Linux
 ```
 
 `build-linux.cmd` собирает Linux-клиент (сервер встроен):
