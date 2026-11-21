@@ -45,13 +45,7 @@ public sealed class MainForm : Form
 
     private static Icon LoadIcon()
     {
-        try
-        {
-            string path = Path.Combine(AppContext.BaseDirectory, "assets", "kroshka.ico");
-            if (File.Exists(path)) return new Icon(path);
-        }
-        catch { }
-        return SystemIcons.Application;
+        return IconLoader.Get();
     }
 
     // ------------------------------------------------------------------ startup

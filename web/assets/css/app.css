@@ -307,6 +307,168 @@ button {
 }
 .avatar.editable:hover > i { opacity: 1; }
 
+/* =============================================================================
+   server picker — the screen that decides where this client talks to.
+
+   Shown before the login form, because "where is my server" is a bigger question
+   than "what is my nickname": on a LAN both answers are local, but a person
+   joining a ZeroTier family needs to point at someone else's machine first.
+   ============================================================================= */
+
+.picker {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(0, 136, 255, 0.16), transparent 60%),
+    radial-gradient(900px 500px at 95% 110%, rgba(0, 128, 255, 0.12), transparent 55%),
+    var(--bg);
+  z-index: 55;
+  overflow-y: auto;
+}
+
+.picker-card {
+  width: 100%;
+  max-width: 560px;
+  padding: 32px 30px 26px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lg);
+  animation: rise var(--med) var(--ease-out);
+}
+
+.picker-head { text-align: center; margin-bottom: 24px; }
+.picker-head .logo { margin-bottom: 14px; }
+.picker-head h1 {
+  margin: 0 0 6px;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.picker-head p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.picker-options {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.picker-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  text-align: left;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--line);
+  background: var(--panel);
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease),
+              transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.picker-option:hover {
+  border-color: var(--line-strong);
+  background: var(--panel-2);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.picker-option.selected {
+  border-color: var(--accent);
+  background: var(--active);
+  box-shadow: 0 0 0 3px var(--active);
+}
+
+.picker-option .opt-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  flex: 0 0 auto;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.picker-option.selected .opt-icon {
+  background: var(--accent);
+  color: #fff;
+}
+
+.picker-option .opt-body { flex: 1; min-width: 0; }
+.picker-option .opt-title {
+  display: block;
+  font-weight: 650;
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+.picker-option .opt-desc {
+  display: block;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.picker-option .opt-check {
+  color: var(--accent);
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+  flex: 0 0 auto;
+  padding-top: 2px;
+}
+.picker-option.selected .opt-check { opacity: 1; }
+
+.picker-address { margin: 4px 0 14px; }
+
+.picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+.picker-actions .btn { flex: 1; }
+
+.picker-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  line-height: 1.4;
+  background: var(--panel);
+  color: var(--text-dim);
+}
+.picker-status.ok { background: rgba(34, 197, 94, 0.12); color: #15803D; }
+.picker-status.error { background: rgba(229, 72, 77, 0.1); color: #E5484D; }
+.picker-status .spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.picker-foot {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.picker-foot a { color: var(--accent); text-decoration: none; }
+.picker-foot a:hover { text-decoration: underline; }
+
 /* ================================================================== login */
 
 .login {

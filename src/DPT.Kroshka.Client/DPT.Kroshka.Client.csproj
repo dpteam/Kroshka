@@ -37,4 +37,11 @@
     <None Include="assets\kroshka.ico" Condition="Exists('assets\kroshka.ico')" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The runtime reads this file to build a multi-size icon for the window and
+         tray. ApplicationIcon only embeds it in the exe; without this the file is
+         absent on a clean install and the shell shows a generic icon. -->
+    <None Update="assets\kroshka.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

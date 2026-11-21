@@ -14,6 +14,66 @@
 </head>
 <body class="booting">
 
+<!-- ========================================================== server picker -->
+<!--
+     Before the nickname, one question: where does this client talk to?
+
+       This device   - start a server here. The family-hub case: one PC hosts.
+       Another server - join a server somebody else runs (LAN or ZeroTier).
+
+     The choice is stored locally, so it is asked once, not every launch.
+-->
+<section id="picker" class="picker hidden" aria-label="Выбор сервера">
+  <div class="picker-card">
+    <div class="picker-head">
+      <div class="logo" id="picker-logo">K</div>
+      <h1 id="picker-title">Kroshka</h1>
+      <p id="picker-tagline">Где будет жить этот чат?</p>
+    </div>
+
+    <div class="picker-options" role="radiogroup" aria-label="Расположение сервера">
+      <button class="picker-option selected" id="opt-local" type="button" role="radio" aria-checked="true">
+        <span class="opt-icon"><i class="fa-solid fa-house-laptop"></i></span>
+        <span class="opt-body">
+          <span class="opt-title">На этом компьютере</span>
+          <span class="opt-desc">Сервер запустится здесь. Подходит, если этот компьютер и есть «дом» для чата.</span>
+        </span>
+        <i class="fa-solid fa-circle-check opt-check"></i>
+      </button>
+
+      <button class="picker-option" id="opt-remote" type="button" role="radio" aria-checked="false">
+        <span class="opt-icon"><i class="fa-solid fa-tower-broadcast"></i></span>
+        <span class="opt-body">
+          <span class="opt-title">На другом сервере</span>
+          <span class="opt-desc">Подключиться к серверу в сети или через ZeroTier. Укажите адрес.</span>
+        </span>
+        <i class="fa-solid fa-circle-check opt-check"></i>
+      </button>
+    </div>
+
+    <label class="field picker-address hidden" id="picker-address-field">
+      <span class="field-label">Адрес сервера</span>
+      <div class="field-input">
+        <i class="fa-solid fa-link"></i>
+        <input id="picker-address" type="text" placeholder="192.168.1.10:6767"
+               autocapitalize="none" autocorrect="off" spellcheck="false">
+      </div>
+    </label>
+
+    <div class="picker-status hidden" id="picker-status"></div>
+
+    <div class="picker-actions">
+      <button class="btn primary" id="picker-connect" type="button">
+        <i class="fa-solid fa-arrow-right"></i> <span>Продолжить</span>
+      </button>
+    </div>
+
+    <p class="picker-foot" id="picker-foot">
+      Настройку можно изменить позже в профиле.
+    </p>
+  </div>
+</section>
+
 <!-- ============================================================ login screen -->
 <section id="login" class="login hidden" aria-label="Вход">
   <div class="login-card">
@@ -275,6 +335,9 @@
       <section class="drawer-section">
         <h3><i class="fa-solid fa-circle-info"></i> О сервере</h3>
         <dl class="info-list" id="server-info"></dl>
+        <button class="btn ghost wide" id="btn-change-server" style="margin-top:10px">
+          <i class="fa-solid fa-right-left"></i> Сменить сервер
+        </button>
       </section>
 
       <button class="btn danger wide" id="btn-logout">

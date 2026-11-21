@@ -245,6 +245,27 @@ public sealed class App : IAsyncDisposable
             KeepAliveInterval = TimeSpan.FromSeconds(30)
         });
 
+        // A browser client may live on a different origin than the server (a page
+        // opened from a file, a reverse proxy, another port on the LAN). The chat
+        // authenticates with a bearer token, not a cookie, so a wildcard origin is
+        // safe here: without it, "connect to another server" simply cannot work in
+        // a browser, and that is a documented feature.
+        app.Use(async (ctx, next) =>
+        {
+            ctx.Response.Headers["Access-Control-Allow-Origin"] = "*";
+            ctx.Response.Headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type";
+            ctx.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS";
+            ctx.Response.Headers["Access-Control-Max-Age"] = "600";
+
+            if (HttpMethods.IsOptions(ctx.Request.Method))
+            {
+                ctx.Response.StatusCode = 204;
+                return;
+            }
+
+            await next();
+        });
+
         // One line per request, never the body and never a secret.
         app.Use(async (ctx, next) =>
         {

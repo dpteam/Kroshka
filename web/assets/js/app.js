@@ -38,13 +38,96 @@ const App = (() => {
 
   // -------------------------------------------------------------------- boot
 
+  /**
+   * Where to point this client. The choice is remembered, so a family member
+   * answers the question once. `mode` is one of:
+   *
+   *   auto    - first run: ask (or, in the desktop app, use the embedded server)
+   *   local   - this window hosts the server (desktop only; the browser cannot)
+   *   remote  - talk to a specific URL
+   */
+  const TARGET_KEY = 'kroshka.target';
+
+  function readTarget() {
+    try {
+      const raw = localStorage.getItem(TARGET_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.mode) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeTarget(target) {
+    try { localStorage.setItem(TARGET_KEY, JSON.stringify(target)); } catch { /* ignore */ }
+    Api.setServer(target.mode === 'remote' ? normalizeServerUrl(target.url) : '');
+  }
+
+  /**
+   * Turns whatever a person typed into a base URL. "192.168.1.10" becomes
+   * "http://192.168.1.10:6767", and a bare "http://host" keeps its default port.
+   */
+  function normalizeServerUrl(input) {
+    let value = String(input || '').trim();
+    if (!value) return '';
+
+    if (!/^https?:\/\//i.test(value)) value = 'http://' + value;
+    value = value.replace(/\/+$/, '');
+
+    try {
+      const url = new URL(value);
+
+      // A LAN address without a port almost certainly means the default one.
+      if (!url.port) url.port = String(state.boot?.defaultPort || 6767);
+
+      return url.origin;
+    } catch {
+      return '';
+    }
+  }
+
+  /** True when this page is served by the desktop shell rather than a browser. */
+  function isDesktopShell() {
+    return !!(window.chrome && window.chrome.webview && window.chrome.webview.postMessage);
+  }
+
   async function boot() {
     applyLocalTheme();
 
+    // The picker exists for the first run of a browser client. The desktop shell
+    // already knows whether it hosts or connects (it started the server or not),
+    // so it goes straight through.
+    const target = readTarget();
+
+    if (!target && !isDesktopShell()) {
+      showPicker();
+      return;
+    }
+
+    if (target && target.mode === 'remote') {
+      Api.setServer(normalizeServerUrl(target.url));
+    } else {
+      Api.setServer('');
+    }
+
+    await loadServer();
+  }
+
+  /** Fetches /api/bootstrap and decides between the login form and the app. */
+  async function loadServer() {
     let boot;
     try {
       boot = await Api.bootstrap();
     } catch (err) {
+      // A remembered remote server that is unreachable is the most common failure
+      // on a laptop that left the house. Offer the picker instead of a dead end.
+      const target = readTarget();
+      if (target && target.mode === 'remote') {
+        showPicker('Сервер ' + target.url + ' недоступен. Проверьте адрес или выберите другой.');
+        return;
+      }
       showLoginFatal('Не удалось связаться с сервером. Проверьте, что он запущен.');
       return;
     }
@@ -75,6 +158,118 @@ const App = (() => {
     }
 
     showLogin();
+  }
+
+  // ------------------------------------------------------------ server picker
+
+  function showPicker(message) {
+    document.body.classList.remove('booting');
+
+    const target = readTarget();
+    const wantsRemote = target?.mode === 'remote';
+
+    $('#picker').classList.remove('hidden');
+    $('#login').classList.add('hidden');
+    $('#app').classList.add('hidden');
+
+    selectOption(wantsRemote ? 'remote' : 'local');
+
+    if (wantsRemote && target.url) {
+      $('#picker-address').value = target.url;
+    }
+
+    if (message) {
+      setPickerStatus(message, 'error');
+    } else {
+      $('#picker-status').classList.add('hidden');
+    }
+
+    $('#picker-logo').textContent = state.boot?.serverShort || 'K';
+    $('#picker-title').textContent = state.boot?.serverName || 'Kroshka';
+  }
+
+  function selectOption(which) {
+    const local = which === 'local';
+    $('#opt-local').classList.toggle('selected', local);
+    $('#opt-remote').classList.toggle('selected', !local);
+    $('#opt-local').setAttribute('aria-checked', String(local));
+    $('#opt-remote').setAttribute('aria-checked', String(!local));
+
+    $('#picker-address-field').classList.toggle('hidden', local);
+    $('#picker-connect').querySelector('span').textContent = local ? 'Начать здесь' : 'Подключиться';
+
+    if (!local) setTimeout(() => $('#picker-address').focus(), 80);
+  }
+
+  function setPickerStatus(text, kind) {
+    const node = $('#picker-status');
+    node.className = 'picker-status' + (kind ? ' ' + kind : '');
+    node.innerHTML = '';
+
+    if (kind === 'checking') {
+      node.append(el('span', { class: 'spinner' }));
+    } else if (kind === 'ok') {
+      node.append(el('i', { class: 'fa-solid fa-circle-check' }));
+    } else if (kind === 'error') {
+      node.append(el('i', { class: 'fa-solid fa-circle-exclamation' }));
+    }
+
+    node.append(el('span', { text }));
+    node.classList.remove('hidden');
+  }
+
+  async function confirmPicker() {
+    const remote = $('#opt-remote').classList.contains('selected');
+    const button = $('#picker-connect');
+    button.disabled = true;
+
+    try {
+      if (!remote) {
+        // A browser tab cannot start a server. Say so plainly instead of
+        // pretending and then failing to load the app.
+        if (!isDesktopShell()) {
+          setPickerStatus(
+            'Запустить сервер может только приложение для Windows. ' +
+            'Откройте Kroshka.exe на компьютере-хосте, а здесь укажите его адрес.',
+            'error');
+          return;
+        }
+
+        writeTarget({ mode: 'local' });
+        await loadServer();
+        return;
+      }
+
+      const url = normalizeServerUrl($('#picker-address').value);
+
+      if (!url) {
+        setPickerStatus('Введите адрес, например 192.168.1.10:6767', 'error');
+        return;
+      }
+
+      setPickerStatus('Проверяю ' + url + '…', 'checking');
+
+      // /api/ping is deliberately public and CORS-open: it says "a Kroshka server
+      // lives here" and nothing else. Using it means a wrong address fails here,
+      // with a clear message, instead of after a half-finished login.
+      const probe = await fetch(url + '/api/ping', { mode: 'cors' })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+
+      if (!probe || !probe.ok) {
+        setPickerStatus('По адресу ' + url + ' сервер не отвечает. Проверьте адрес и порт.', 'error');
+        return;
+      }
+
+      setPickerStatus('Найден сервер «' + (probe.name || 'Kroshka') + '»', 'ok');
+      writeTarget({ mode: 'remote', url });
+      Api.setToken(null);
+      await loadServer();
+    } catch (err) {
+      setPickerStatus(err.message || 'Не удалось подключиться', 'error');
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function applyBranding(boot) {
@@ -119,6 +314,7 @@ const App = (() => {
 
   function showLogin() {
     document.body.classList.remove('booting');
+    $('#picker').classList.add('hidden');
     $('#login').classList.remove('hidden');
     $('#app').classList.add('hidden');
     setTimeout(() => $('#login-nick').focus(), 60);
@@ -126,6 +322,7 @@ const App = (() => {
 
   function showLoginFatal(message) {
     document.body.classList.remove('booting');
+    $('#picker').classList.add('hidden');
     $('#login').classList.remove('hidden');
     const box = $('#login-error');
     box.textContent = message;
@@ -175,6 +372,7 @@ const App = (() => {
 
   async function enterApp() {
     document.body.classList.remove('booting');
+    $('#picker').classList.add('hidden');
     $('#login').classList.add('hidden');
     $('#app').classList.remove('hidden');
 
@@ -1856,8 +2054,16 @@ const App = (() => {
       ['Лимит файла', `${boot.maxUploadMb || 64} МБ`]
     ];
 
-    if (boot.footer) rows.push(['', boot.footer]);
+    // Show which mode this client is in, so "why can't I see my messages" has an
+    // answer without opening the settings.
+    const target = readTarget();
+    if (isDesktopShell() && (!target || target.mode === 'local')) {
+      rows.push(['Режим', 'сервер на этом компьютере']);
+    } else if (target?.mode === 'remote') {
+      rows.push(['Режим', 'подключён к серверу']);
+    }
 
+    if (boot.footer) rows.push(['', boot.footer]);
     for (const [key, value] of rows) {
       host.append(el('dt', { text: key }), el('dd', { text: value }));
     }
@@ -2034,6 +2240,22 @@ const App = (() => {
 
   function bind() {
     $('#login-form').addEventListener('submit', doLogin);
+
+    // ---- server picker
+    $('#opt-local').addEventListener('click', () => selectOption('local'));
+    $('#opt-remote').addEventListener('click', () => selectOption('remote'));
+    $('#picker-connect').addEventListener('click', confirmPicker);
+    $('#picker-address').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        confirmPicker();
+      }
+    });
+
+    $('#btn-change-server').addEventListener('click', () => {
+      closeDrawer();
+      showPicker();
+    });
 
     $('#search-input').addEventListener('input', (event) => {
       const query = event.target.value.trim();
@@ -2288,7 +2510,10 @@ const App = (() => {
     });
   }
 
-  return { start, state, openConversation, sortedConversations, renderConversations, conversationRow };
+  return {
+    start, state, openConversation, sortedConversations, renderConversations, conversationRow,
+    showPicker, normalizeServerUrl
+  };
 })();
 
 document.addEventListener('DOMContentLoaded', () => App.start());

@@ -77,9 +77,37 @@ call :pack "server-win-x64" "KroshkaServer.exe" "win-x64" "server"
 call :pack "server-linux-x64" "KroshkaServer" "linux-x64" "server"
 call :pack "client-win-x64" "Kroshka.exe" "win-x64" "client"
 
+call :installer
+
 echo.
 echo   artifacts\
 dir /b artifacts
+goto :eof
+
+:installer
+rem The installer is the thing most people actually download, so build it last
+rem and only if its compiler is present.
+set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+
+if not exist "%ISCC%" (
+  echo   [skip] installer - Inno Setup 6 not found
+  echo          install it, then run: build.cmd publish
+  goto :eof
+)
+
+if not exist "bin\self\client-win-x64\Kroshka.exe" (
+  echo   [skip] installer - run "build.cmd self" first
+  goto :eof
+)
+
+echo   building installer...
+"%ISCC%" /Q installer\kroshka.iss >nul
+if errorlevel 1 (
+  echo   [warn] installer build failed
+) else (
+  echo   packed kroshka installer
+)
 goto :eof
 
 :pack
@@ -113,9 +141,14 @@ if not exist "%DST%" mkdir "%DST%"
 
 rem The compiled output goes in first: without this the folder has web/ and data/
 rem but no exe, which looks like a successful build and is not one.
-xcopy "%SRC%" "%DST%\" /E /I /Y /Q >nul
-if errorlevel 1 (
-  echo   [warn] could not copy binaries from %SRC%
+rem
+rem When SRC and DST are the same folder (the self-contained case) there is nothing
+rem to copy - xcopy would try to copy the tree into itself.
+if /i not "%SRC%"=="%DST%" (
+  xcopy "%SRC%" "%DST%\" /E /I /Y /Q >nul
+  if errorlevel 1 (
+    echo   [warn] could not copy binaries from %SRC%
+  )
 )
 
 if not exist "%DST%\web" mkdir "%DST%\web"

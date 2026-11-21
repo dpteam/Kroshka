@@ -124,11 +124,88 @@ jobs:
           retention-days: 30
 
   # ---------------------------------------------------------------------------
-  # A release tag turns the same artifacts into a GitHub release.
+  # The installer: the artifact most people actually download. Built on Windows
+  # because Inno Setup is Windows-only, from the same published client folder.
+  # ---------------------------------------------------------------------------
+  installer:
+    name: installer (win-x64)
+    needs: publish
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Publish the client (self-contained)
+        run: >
+          dotnet publish src/DPT.Kroshka.Client/DPT.Kroshka.Client.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=false
+          -o bin/self/client-win-x64
+
+      - name: Publish the server (self-contained)
+        run: >
+          dotnet publish src/DPT.Kroshka.Server/DPT.Kroshka.Server.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=false
+          -o bin/self/server-win-x64
+
+      - name: Add runtime files to both
+        shell: pwsh
+        run: |
+          foreach ($dir in @('bin/self/client-win-x64', 'bin/self/server-win-x64')) {
+            New-Item -ItemType Directory -Force -Path "$dir/web" | Out-Null
+            Copy-Item -Recurse -Force web/* "$dir/web/"
+            New-Item -ItemType Directory -Force -Path "$dir/data", "$dir/logs" | Out-Null
+          }
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          # The version comes from the tag when releasing, otherwise from the csproj.
+          $version = if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $env:GITHUB_REF -replace '^refs/tags/v', ''
+          } else { '0.0.0-ci' }
+
+          $env:KROSHKA_VERSION = $version
+          Write-Host "installer version: $version"
+
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\kroshka.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+
+          $setup = Get-ChildItem artifacts/kroshka-*-setup.exe
+          if (-not $setup) { throw "installer was not produced" }
+          Write-Host "$($setup.Name) -> $([Math]::Round($setup.Length / 1MB, 1)) MB"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: kroshka-installer-win-x64
+          path: artifacts/kroshka-*-setup.exe
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # A tag turns the artifacts into a GitHub release.
+  #
+  # The tag name decides the kind:
+  #   v1.0.0        -> normal release
+  #   v1.0.0-rc1    -> pre-release (anything with a suffix)
+  #   v1.0.0-beta2  -> pre-release
+  #
+  # So "ship a pre-release now, promote it later" is just a second tag with the
+  # suffix dropped, no hand-editing of the release page.
   # ---------------------------------------------------------------------------
   release:
     name: release
-    needs: publish
+    needs: [publish, installer]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -146,12 +223,28 @@ jobs:
       - name: List files
         run: ls -la dist
 
+      - name: Decide release kind
+        id: kind
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # A suffix after the version means "not final yet".
+          if [[ "$TAG" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "Publishing $TAG as a pre-release"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "Publishing $TAG as a normal release"
+          fi
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          name: ${{ steps.kind.outputs.tag }}
+          files: dist/*
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.kind.outputs.prerelease == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

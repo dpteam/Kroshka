@@ -63,13 +63,7 @@ public sealed class TrayHost : IDisposable
 
     private static Icon LoadIcon()
     {
-        try
-        {
-            string path = Path.Combine(AppContext.BaseDirectory, "assets", "kroshka.ico");
-            if (File.Exists(path)) return new Icon(path);
-        }
-        catch { }
-        return SystemIcons.Application;
+        return IconLoader.ForTray();
     }
 
     public void SetStatus(string text)

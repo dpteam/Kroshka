@@ -64,6 +64,15 @@ public sealed class Api
 
         app.MapGet("/api/bootstrap", () => Results.Json(BuildBootstrap()));
 
+    // A bare liveness probe with no user data, safe to call from any origin.
+    // The browser client uses it to check an address before committing to it.
+    app.MapGet("/api/ping", () => Results.Json(new
+    {
+        ok = true,
+        name = _cfg.SiteName,
+        version = Protocol.Version
+    }));
+
         app.MapPost("/api/login", AsDelegate(LoginAsync));
         app.MapPost("/api/logout", AsDelegate(Logout));
         app.MapGet("/api/me", AsDelegate(ctx => Authed(ctx, user => Results.Json(new { ok = true, user, me = user }))));
