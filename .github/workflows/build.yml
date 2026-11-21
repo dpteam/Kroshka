@@ -38,6 +38,9 @@ jobs:
       - name: Self-test (storage, config, crypto, sessions)
         run: dotnet run --project src/DPT.Kroshka.Server/DPT.Kroshka.Server.csproj -c Release --no-build -- --selftest
 
+      - name: Self-test (Linux client: paths, urls, browser, desktop files)
+        run: dotnet run --project src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj -c Release --no-build -- --selftest
+
       - name: Upload self-test log
         if: always()
         uses: actions/upload-artifact@v4
@@ -54,7 +57,9 @@ jobs:
   publish:
     name: publish ${{ matrix.name }}
     needs: test
-    runs-on: windows-latest
+    # Linux artifacts are packaged on a Linux runner so tar/chmod behave natively;
+    # Windows ones stay on Windows. Cross-compiling itself works from either.
+    runs-on: ${{ startsWith(matrix.rid, 'linux') && 'ubuntu-latest' || 'windows-latest' }}
 
     strategy:
       fail-fast: false
@@ -71,6 +76,14 @@ jobs:
           - name: client-win-x64
             project: src/DPT.Kroshka.Client/DPT.Kroshka.Client.csproj
             rid: win-x64
+            role: client
+          - name: linux-x64
+            project: src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj
+            rid: linux-x64
+            role: client
+          - name: linux-arm64
+            project: src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj
+            rid: linux-arm64
             role: client
 
     steps:
@@ -99,28 +112,58 @@ jobs:
           Copy-Item -Force config.example.ini out/
           Copy-Item -Force LICENSE out/ -ErrorAction SilentlyContinue
           Copy-Item -Force README.md out/ -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path out/data, out/logs | Out-Null
+          Remove-Item -Force out/*.pdb -ErrorAction SilentlyContinue
+
+          $isLinux = '${{ matrix.rid }}'.StartsWith('linux')
+          if ($isLinux) {
+            # The Linux client ships an installer script and themed icons.
+            Copy-Item -Force linux/install.sh out/
+            New-Item -ItemType Directory -Force -Path out/icons | Out-Null
+            Copy-Item -Force web/assets/img/logo-192.png out/icons/kroshka-192.png
+            Copy-Item -Force web/assets/img/logo-512.png out/icons/kroshka-512.png
+          } else {
+            New-Item -ItemType Directory -Force -Path out/data, out/logs | Out-Null
+          }
 
           # Prove the archive is not empty before we bother uploading it.
           $exe = if ('${{ matrix.role }}' -eq 'server') {
-            if ('${{ matrix.rid }}' -eq 'win-x64') { 'out/KroshkaServer.exe' } else { 'out/KroshkaServer' }
-          } else { 'out/Kroshka.exe' }
+            if ($isLinux) { 'out/KroshkaServer' } else { 'out/KroshkaServer.exe' }
+          } elseif ($isLinux) { 'out/kroshka' } else { 'out/Kroshka.exe' }
 
           if (-not (Test-Path $exe)) { throw "missing $exe" }
           Write-Host "verified $exe ($([Math]::Round((Get-Item $exe).Length / 1MB, 1)) MB)"
 
-      - name: Zip
+      - name: "Package (Windows: zip)"
+        if: ${{ !startsWith(matrix.rid, 'linux') }}
         shell: pwsh
         run: |
           $name = "kroshka-${{ matrix.role }}-${{ matrix.rid }}"
           Compress-Archive -Path out/* -DestinationPath "$name.zip" -CompressionLevel Optimal
           Write-Host "$name.zip -> $([Math]::Round((Get-Item "$name.zip").Length / 1MB, 1)) MB"
 
+      - name: "Package (Linux: tar.gz)"
+        if: ${{ startsWith(matrix.rid, 'linux') }}
+        shell: bash
+        run: |
+          # tar.gz, not zip: zip drops the execute bit and ./kroshka would refuse
+          # to start after extraction. tar also keeps install.sh executable.
+          name="kroshka-${{ matrix.role }}-${{ matrix.rid }}"
+
+          # install.sh must use LF endings or bash fails with "bad interpreter".
+          sed -i 's/\r$//' out/install.sh
+          chmod +x out/kroshka out/install.sh
+
+          tar -czf "$name.tar.gz" -C out .
+          echo "$name.tar.gz -> $(du -h "$name.tar.gz" | cut -f1)"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: kroshka-${{ matrix.role }}-${{ matrix.rid }}
-          path: kroshka-${{ matrix.role }}-${{ matrix.rid }}.zip
+          path: |
+            kroshka-${{ matrix.role }}-${{ matrix.rid }}.zip
+            kroshka-${{ matrix.role }}-${{ matrix.rid }}.tar.gz
+          if-no-files-found: ignore
           retention-days: 30
 
   # ---------------------------------------------------------------------------

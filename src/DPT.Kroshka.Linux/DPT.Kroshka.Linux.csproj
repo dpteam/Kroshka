@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>DPT.Kroshka.Linux</RootNamespace>
+    <AssemblyName>kroshka</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>false</InvariantGlobalization>
+
+    <!-- The client is published per-RID, but the project must still build on any
+         machine so the pure logic can be compiled and self-tested there. -->
+    <RuntimeIdentifiers>linux-x64;linux-arm64</RuntimeIdentifiers>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DPT.Kroshka.Server\DPT.Kroshka.Server.csproj" />
+    <ProjectReference Include="..\DPT.Kroshka.Shared\DPT.Kroshka.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The embedded server is an ASP.NET Core app; this reference is what lets
+         the launcher start it in-process without shipping a second binary. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

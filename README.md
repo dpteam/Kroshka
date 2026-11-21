@@ -33,6 +33,7 @@ Kroshka — это альтернатива Telegram для дома: стави
 | 🎨 **Темы** | Светлая, тёмная, OLED — с настройкой всей палитры |
 | 🔊 **Звуки** | Синтезируются на месте, без единого аудиофайла |
 | 🖥 **Трей** | Закрывается в трей, значок с числом непрочитанных |
+| 🐧 **Linux** | Тот же чат, сервер встроен, установка одним скриптом |
 | 🛠 **Админка** | Отдельный порт: люди, комнаты, бэкапы, сжатие, чистка |
 
 ---
@@ -70,6 +71,16 @@ tar -xzf kroshka-server-linux-x64.zip
   адрес: http://192.168.1.10:6767/
   админ: http://192.168.1.10:6768/admin
 ```
+
+### Вариант 3: Linux
+
+```bash
+tar -xzf kroshka-linux-x64.tar.gz
+./install.sh          # ярлык в меню, по желанию — служба systemd
+kroshka
+```
+
+Сервер встроен в клиент. Подробности — [`linux/README.md`](linux/README.md).
 
 ### Открыть порт в брандмауэре
 
@@ -185,13 +196,16 @@ Kroshka/
 ├─ src/
 │  ├─ DPT.Kroshka.Shared/   модели, протокол, конфиг, лог, файловые утилиты
 │  ├─ DPT.Kroshka.Server/   Kestrel, REST + WebSocket, хранилище, админка
-│  └─ DPT.Kroshka.Client/   WinForms + WebView2 + трей
+│  ├─ DPT.Kroshka.Client/   WinForms + WebView2 + трей (Windows)
+│  └─ DPT.Kroshka.Linux/    launcher: сервер + окно Chromium (Linux)
 ├─ web/                     ОДИН интерфейс для десктопа, браузера и будущего Android
-│  ├─ assets/css/           app.css (три темы), admin.css
-│  ├─ assets/js/            api, ui, sound, app, admin
+│  ├─ assets/css/           app.css (три темы), settings.css, admin.css
+│  ├─ assets/js/            api, serverurl, ui, sound, app, admin
 │  └─ vendor/fontawesome/   полный офлайн-пакет
+├─ linux/                   install.sh и README для Linux
 ├─ android/                 план мобильного клиента
-├─ tools/                   firewall.ps1, make-ico.ps1
+├─ installer/               Inno Setup для Windows
+├─ tools/                   firewall.ps1, make-ico.ps1, clean-test-data.ps1
 └─ docs/                    архитектура и решения
 ```
 
@@ -252,6 +266,10 @@ build.cmd self       # self-contained: win-x64 и linux-x64
 build.cmd publish    # архивы + установщик в artifacts\
 build.cmd test       # внутренние тесты хранилища
 build.cmd clean
+
+build-linux.cmd      # Linux-клиент: linux-x64
+build-linux.cmd both # linux-x64 + linux-arm64
+build-linux.cmd test # 46 проверок Linux-клиента
 ```
 
 `build.cmd publish` собирает:
@@ -263,9 +281,16 @@ artifacts\kroshka-server-win-x64.zip    — сервер для Windows
 artifacts\kroshka-server-linux-x64.zip  — сервер для Linux
 ```
 
+`build-linux.cmd` собирает Linux-клиент (сервер встроен):
+
+```
+artifacts\kroshka-linux-x64.tar.gz      — обычные ПК и серверы
+artifacts\kroshka-linux-arm64.tar.gz    — Raspberry Pi 4+, ARM-серверы
+```
+
 Тесты — это не формальность: они проверяют атомарную запись, восстановление из
 `.bak`, чтение NDJSON после обрыва, дедупликацию файлов и жизненный цикл сессий.
-99 проверок, все зелёные.
+99 проверок на сервере и 46 на Linux-клиенте, все зелёные.
 
 ### Разработка
 
@@ -319,8 +344,9 @@ tools\clean-test-data.ps1 -Data bin\server\data -Everything -Apply
 
 ## Android и Linux
 
-**Linux-сервер** собирается уже сейчас (`build.cmd self`) и работает headless.
-**Linux-клиент** — следующий шаг: тот же `web/`, обёрнутый в GTK-WebKit.
+**Linux-клиент** готов: `kroshka-linux-x64.tar.gz` (и `arm64`). Сервер встроен,
+окно чата открывается в Chromium без адресной строки. Установка — `./install.sh`,
+подробности в [`linux/README.md`](linux/README.md).
 
 **Android** — в [`android/`](android/README.md) лежит план: `.NET 10 Android` +
 WebView с тем же интерфейсом и мост на `@JavascriptInterface`, как в AutoZapret.

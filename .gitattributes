@@ -13,6 +13,7 @@
 *.ps1       text
 *.cmd       text eol=crlf
 *.bat       text eol=crlf
+*.sh        text eol=lf
 
 *.png       binary
 *.jpg       binary
