@@ -38,7 +38,7 @@ jobs:
       - name: Self-test (storage, config, crypto, sessions)
         run: dotnet run --project src/DPT.Kroshka.Server/DPT.Kroshka.Server.csproj -c Release --no-build -- --selftest
 
-      - name: Self-test (Linux client: paths, urls, browser, desktop files)
+      - name: "Self-test (Linux client: paths, urls, browser, desktop files)"
         run: dotnet run --project src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj -c Release --no-build -- --selftest
 
       - name: Upload self-test log
