@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Kroshka">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0080FF"/>
+      <stop offset="1" stop-color="#0066CC"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="64" height="64" rx="18" fill="url(#g)"/>
+  <rect x="0" y="0" width="64" height="64" rx="18" fill="url(#gloss)"/>
+
+  <!-- stylised K drawn as two strokes plus a dot, so it reads at 16px -->
+  <path d="M20 16 V48" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M44 16 L27 33 L45 48" stroke="#FFFFFF" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <circle cx="45" cy="17" r="3.5" fill="#FFFFFF" fill-opacity="0.85"/>
+</svg>

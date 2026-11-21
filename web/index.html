@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Kroshka</title>
+
+<link rel="icon" href="/assets/img/logo.svg?v=__BUILD__" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png?v=__BUILD__">
+
+<link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css?v=__BUILD__">
+<link rel="stylesheet" href="/assets/css/app.css?v=__BUILD__">
+</head>
+<body class="booting">
+
+<!-- ============================================================ login screen -->
+<section id="login" class="login hidden" aria-label="Вход">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="logo" id="login-logo">K</div>
+      <h1 id="login-name">Kroshka</h1>
+      <p id="login-tagline">Мессенджер для своих</p>
+    </div>
+
+    <form id="login-form" autocomplete="off">
+      <label class="field">
+        <span class="field-label">Ваш ник</span>
+        <div class="field-input">
+          <i class="fa-solid fa-at"></i>
+          <input id="login-nick" name="nick" type="text" placeholder="например, папа"
+                 maxlength="24" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+        </div>
+      </label>
+
+      <label class="field hidden" id="login-password-field">
+        <span class="field-label">Пароль семьи</span>
+        <div class="field-input">
+          <i class="fa-solid fa-lock"></i>
+          <input id="login-password" name="password" type="password" placeholder="общий пароль" autocomplete="current-password">
+        </div>
+      </label>
+
+      <label class="field hidden" id="login-invite-field">
+        <span class="field-label">Код приглашения</span>
+        <div class="field-input">
+          <i class="fa-solid fa-ticket"></i>
+          <input id="login-invite" name="invite" type="text" placeholder="код от владельца" autocapitalize="none" spellcheck="false">
+        </div>
+      </label>
+
+      <label class="checkbox">
+        <input id="login-remember" type="checkbox" checked>
+        <span>Запомнить меня на этом устройстве</span>
+      </label>
+
+      <button class="btn primary wide" type="submit" id="login-submit">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i>
+        <span>Войти</span>
+      </button>
+
+      <p class="login-error hidden" id="login-error" role="alert"></p>
+    </form>
+
+    <p class="login-foot" id="login-foot"></p>
+  </div>
+</section>
+
+<!-- ============================================================== application -->
+<div id="app" class="app hidden">
+
+  <!-- ---------------------------------------------------------------- sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <header class="sidebar-head">
+      <button class="icon-btn" id="btn-menu" title="Меню">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="sidebar-title">
+        <strong id="brand-name">Kroshka</strong>
+        <span id="conn-state" class="conn" title="Соединение">
+          <i class="fa-solid fa-circle"></i>
+        </span>
+      </div>
+      <button class="icon-btn" id="btn-new-room" title="Новая комната">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+    </header>
+
+    <div class="sidebar-search">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input id="search-input" type="search" placeholder="Поиск по сообщениям" spellcheck="false">
+      <button class="icon-btn tiny hidden" id="search-clear" title="Сбросить">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <nav class="conv-list" id="conv-list" aria-label="Диалоги"></nav>
+
+    <footer class="sidebar-foot">
+      <button class="me" id="btn-profile">
+        <span class="avatar sm" id="me-avatar">?</span>
+        <span class="me-text">
+          <strong id="me-name">—</strong>
+          <small id="me-role"></small>
+        </span>
+        <i class="fa-solid fa-gear"></i>
+      </button>
+    </footer>
+  </aside>
+
+  <!-- ------------------------------------------------------------------ chat -->
+  <main class="chat" id="chat">
+    <div class="chat-empty" id="chat-empty">
+      <div class="empty-art">
+        <i class="fa-regular fa-comments"></i>
+      </div>
+      <h2>Выберите диалог</h2>
+      <p>Комнаты слева, личные сообщения — по клику на участника.</p>
+    </div>
+
+    <div class="chat-body hidden" id="chat-body">
+      <header class="chat-head">
+        <button class="icon-btn mobile-only" id="btn-back" title="Назад">
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <div class="chat-head-info">
+          <h2 id="chat-title">—</h2>
+          <p id="chat-subtitle"></p>
+        </div>
+        <div class="chat-head-actions">
+          <button class="icon-btn" id="btn-search-in" title="Поиск в диалоге">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
+          <button class="icon-btn" id="btn-room-settings" title="Настройки комнаты">
+            <i class="fa-solid fa-sliders"></i>
+          </button>
+        </div>
+      </header>
+
+      <div class="pinned-bar hidden" id="pinned-bar">
+        <i class="fa-solid fa-thumbtack"></i>
+        <div class="pinned-text" id="pinned-text"></div>
+        <button class="icon-btn tiny" id="btn-unpin" title="Открепить">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="messages" id="messages" tabindex="0">
+        <button class="load-more hidden" id="btn-load-more">
+          <i class="fa-solid fa-arrow-up"></i> Показать раньше
+        </button>
+        <div id="messages-inner"></div>
+        <div class="typing-line" id="typing-line"></div>
+      </div>
+
+      <div class="reply-bar hidden" id="reply-bar">
+        <div class="reply-quote">
+          <i class="fa-solid fa-reply"></i>
+          <div>
+            <strong id="reply-author"></strong>
+            <span id="reply-preview"></span>
+          </div>
+        </div>
+        <button class="icon-btn tiny" id="btn-cancel-reply" title="Отмена">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <footer class="composer">
+        <div class="composer-main">
+          <button class="icon-btn" id="btn-attach" title="Прикрепить файл">
+            <i class="fa-solid fa-paperclip"></i>
+          </button>
+          <textarea id="composer-input" rows="1" placeholder="Сообщение…"
+                    maxlength="8000" spellcheck="true"></textarea>
+          <button class="icon-btn" id="btn-emoji" title="Эмодзи">
+            <i class="fa-regular fa-face-smile"></i>
+          </button>
+          <button class="icon-btn" id="btn-voice" title="Голосовое">
+            <i class="fa-solid fa-microphone"></i>
+          </button>
+          <button class="send-btn" id="btn-send" title="Отправить (Enter)">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+
+        <div class="recorder hidden" id="recorder">
+          <span class="rec-dot"></span>
+          <span id="rec-time">0:00</span>
+          <div class="rec-wave" id="rec-wave"></div>
+          <button class="icon-btn" id="btn-rec-cancel" title="Отменить">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+          <button class="send-btn" id="btn-rec-send" title="Отправить">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+
+        <div class="upload-progress hidden" id="upload-progress">
+          <div class="bar"><span id="upload-bar"></span></div>
+          <span id="upload-label">Загрузка…</span>
+        </div>
+      </footer>
+    </div>
+  </main>
+
+  <!-- -------------------------------------------------------------- drawer -->
+  <div class="drawer-scrim hidden" id="drawer-scrim"></div>
+  <aside class="drawer hidden" id="drawer" aria-label="Профиль">
+    <header class="drawer-head">
+      <h2>Профиль</h2>
+      <button class="icon-btn" id="btn-drawer-close" title="Закрыть">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </header>
+
+    <div class="drawer-body">
+      <div class="profile-card">
+        <button class="avatar lg editable" id="profile-avatar" title="Сменить аватар">
+          <span data-avatar-text>?</span>
+          <i class="fa-solid fa-camera"></i>
+        </button>
+        <input type="file" id="avatar-input" accept="image/*" hidden>
+        <label class="field">
+          <span class="field-label">Отображаемое имя</span>
+          <div class="field-input">
+            <i class="fa-solid fa-signature"></i>
+            <input id="profile-name" type="text" maxlength="64">
+          </div>
+        </label>
+        <label class="field">
+          <span class="field-label">О себе</span>
+          <div class="field-input">
+            <i class="fa-solid fa-quote-left"></i>
+            <input id="profile-bio" type="text" maxlength="300">
+          </div>
+        </label>
+        <button class="btn primary wide" id="btn-save-profile">
+          <i class="fa-solid fa-check"></i> Сохранить
+        </button>
+      </div>
+
+      <section class="drawer-section">
+        <h3><i class="fa-solid fa-palette"></i> Оформление</h3>
+        <div class="theme-picker" id="theme-picker">
+          <button class="theme-swatch" data-theme="light">
+            <span class="swatch-preview light"></span> Светлая
+          </button>
+          <button class="theme-swatch" data-theme="dark">
+            <span class="swatch-preview dark"></span> Тёмная
+          </button>
+          <button class="theme-swatch" data-theme="oled">
+            <span class="swatch-preview oled"></span> OLED
+          </button>
+        </div>
+      </section>
+
+      <section class="drawer-section">
+        <h3><i class="fa-solid fa-bell"></i> Уведомления</h3>
+        <label class="switch">
+          <input type="checkbox" id="set-sound">
+          <span>Звуки сообщений</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="set-notifications">
+          <span>Всплывающие уведомления</span>
+        </label>
+      </section>
+
+      <section class="drawer-section">
+        <h3><i class="fa-solid fa-shield-halved"></i> Устройства</h3>
+        <div id="sessions-list" class="sessions"></div>
+      </section>
+
+      <section class="drawer-section">
+        <h3><i class="fa-solid fa-circle-info"></i> О сервере</h3>
+        <dl class="info-list" id="server-info"></dl>
+      </section>
+
+      <button class="btn danger wide" id="btn-logout">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i> Выйти
+      </button>
+    </div>
+  </aside>
+
+  <!-- -------------------------------------------------------------- modals -->
+  <div class="modal-scrim hidden" id="modal-scrim"></div>
+
+  <div class="modal hidden" id="modal-room">
+    <header class="modal-head">
+      <h2>Новая комната</h2>
+      <button class="icon-btn" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+    </header>
+    <div class="modal-body">
+      <label class="field">
+        <span class="field-label">Название</span>
+        <div class="field-input"><i class="fa-solid fa-hashtag"></i>
+          <input id="room-name" type="text" maxlength="64" placeholder="Кухня">
+        </div>
+      </label>
+      <label class="field">
+        <span class="field-label">Тема</span>
+        <div class="field-input"><i class="fa-solid fa-align-left"></i>
+          <input id="room-topic" type="text" maxlength="200" placeholder="О чём тут болтаем">
+        </div>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="room-private">
+        <span>Приватная (только по приглашению)</span>
+      </label>
+      <div id="room-members" class="member-picker"></div>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn ghost" data-close-modal>Отмена</button>
+      <button class="btn primary" id="btn-create-room">Создать</button>
+    </footer>
+  </div>
+
+  <div class="modal hidden" id="modal-users">
+    <header class="modal-head">
+      <h2>Написать человеку</h2>
+      <button class="icon-btn" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+    </header>
+    <div class="modal-body">
+      <div class="user-list" id="user-list"></div>
+    </div>
+  </div>
+
+  <div class="emoji-pop hidden" id="emoji-pop"></div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</div>
+
+<script src="/assets/js/api.js?v=__BUILD__"></script>
+<script src="/assets/js/sound.js?v=__BUILD__"></script>
+<script src="/assets/js/ui.js?v=__BUILD__"></script>
+<script src="/assets/js/app.js?v=__BUILD__"></script>
+</body>
+</html>

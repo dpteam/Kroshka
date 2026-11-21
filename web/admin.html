@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kroshka — админка</title>
+<link rel="icon" href="/assets/img/favicon.svg?v=__BUILD__" type="image/svg+xml">
+<link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css?v=__BUILD__">
+<link rel="stylesheet" href="/assets/css/app.css?v=__BUILD__">
+<link rel="stylesheet" href="/assets/css/admin.css?v=__BUILD__">
+</head>
+<body class="admin">
+
+<!-- ---------------------------------------------------------------- login -->
+<section id="admin-login" class="admin-login hidden">
+  <form class="login-card" id="admin-login-form">
+    <div class="login-brand">
+      <div class="logo"><i class="fa-solid fa-shield-halved"></i></div>
+      <h1>Админка</h1>
+      <p>Управление сервером Kroshka</p>
+    </div>
+    <label class="field">
+      <span class="field-label">Пароль администратора</span>
+      <div class="field-input">
+        <i class="fa-solid fa-key"></i>
+        <input id="admin-password" type="password" placeholder="admin.password из config.ini" autocomplete="current-password">
+      </div>
+    </label>
+    <button class="btn primary wide" type="submit" id="admin-submit">
+      <i class="fa-solid fa-arrow-right-to-bracket"></i> Войти
+    </button>
+    <p class="login-error hidden" id="admin-error"></p>
+  </form>
+</section>
+
+<!-- ------------------------------------------------------------- dashboard -->
+<div id="admin-app" class="admin-app hidden">
+  <header class="admin-head">
+    <div class="admin-brand">
+      <div class="logo sm">K</div>
+      <div>
+        <strong id="admin-title">Kroshka</strong>
+        <small id="admin-subtitle">панель управления</small>
+      </div>
+    </div>
+    <nav class="admin-tabs" id="admin-tabs">
+      <button class="tab active" data-tab="overview"><i class="fa-solid fa-gauge"></i> Обзор</button>
+      <button class="tab" data-tab="users"><i class="fa-solid fa-users"></i> Люди</button>
+      <button class="tab" data-tab="rooms"><i class="fa-solid fa-hashtag"></i> Комнаты</button>
+      <button class="tab" data-tab="config"><i class="fa-solid fa-sliders"></i> Настройки</button>
+      <button class="tab" data-tab="maintenance"><i class="fa-solid fa-screwdriver-wrench"></i> Обслуживание</button>
+      <button class="tab" data-tab="logs"><i class="fa-solid fa-file-lines"></i> Логи</button>
+    </nav>
+    <div class="admin-actions">
+      <button class="icon-btn" id="btn-refresh" title="Обновить"><i class="fa-solid fa-rotate"></i></button>
+      <button class="icon-btn" id="btn-admin-logout" title="Выйти"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+    </div>
+  </header>
+
+  <main class="admin-main">
+
+    <!-- ------------------------------------------------------- overview -->
+    <section class="panel" data-panel="overview">
+      <div class="stat-grid" id="stat-grid"></div>
+
+      <div class="card">
+        <h2><i class="fa-solid fa-server"></i> Сервер</h2>
+        <dl class="info-list" id="server-facts"></dl>
+      </div>
+
+      <div class="card" id="warn-card">
+        <h2><i class="fa-solid fa-triangle-exclamation"></i> Предупреждения</h2>
+        <ul class="warn-list" id="warn-list"></ul>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------- users -->
+    <section class="panel hidden" data-panel="users">
+      <div class="panel-head">
+        <h2><i class="fa-solid fa-users"></i> Участники</h2>
+        <button class="btn primary sm" id="btn-add-user">
+          <i class="fa-solid fa-user-plus"></i> Добавить
+        </button>
+      </div>
+
+      <div class="card flush">
+        <table class="table" id="users-table">
+          <thead>
+            <tr>
+              <th>Ник</th>
+              <th>Имя</th>
+              <th>Роль</th>
+              <th>Статус</th>
+              <th>Создан</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------- rooms -->
+    <section class="panel hidden" data-panel="rooms">
+      <div class="panel-head">
+        <h2><i class="fa-solid fa-hashtag"></i> Комнаты</h2>
+        <button class="btn primary sm" id="btn-add-room">
+          <i class="fa-solid fa-plus"></i> Создать
+        </button>
+      </div>
+
+      <div class="card flush">
+        <table class="table" id="rooms-table">
+          <thead>
+            <tr>
+              <th>Название</th>
+              <th>Тип</th>
+              <th>Сообщений</th>
+              <th>Последнее</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------- config -->
+    <section class="panel hidden" data-panel="config">
+      <div class="panel-head">
+        <h2><i class="fa-solid fa-sliders"></i> Настройки</h2>
+        <button class="btn primary sm" id="btn-save-config">
+          <i class="fa-solid fa-floppy-disk"></i> Сохранить
+        </button>
+      </div>
+
+      <p class="hint">
+        Изменения сохраняются в <code>data/overrides.json</code> и перекрывают
+        <code>config.ini</code>, не трогая комментарии в файле. Часть настроек
+        применится после перезапуска сервера.
+      </p>
+
+      <div class="card" id="config-form"></div>
+    </section>
+
+    <!-- ---------------------------------------------------- maintenance -->
+    <section class="panel hidden" data-panel="maintenance">
+      <h2 class="panel-title"><i class="fa-solid fa-screwdriver-wrench"></i> Обслуживание</h2>
+
+      <div class="tool-grid">
+        <div class="tool">
+          <h3><i class="fa-solid fa-box-archive"></i> Резервная копия</h3>
+          <p>Снимок всей папки <code>data</code>. Старые копии удаляются автоматически.</p>
+          <button class="btn primary" id="btn-backup">Создать копию</button>
+          <div class="backup-list" id="backup-list"></div>
+        </div>
+
+        <div class="tool">
+          <h3><i class="fa-solid fa-broom"></i> Сжать базу</h3>
+          <p>Переписывает журналы сообщений, выбрасывая повреждённые строки. Безопасно в любой момент.</p>
+          <button class="btn" id="btn-compact">Сжать</button>
+        </div>
+
+        <div class="tool">
+          <h3><i class="fa-solid fa-trash-can"></i> Удалить старое</h3>
+          <p>Удаляет сообщения старше указанного срока. Необратимо.</p>
+          <div class="inline-form">
+            <input type="number" id="prune-months" min="1" max="120" value="12" class="input">
+            <span>мес.</span>
+            <button class="btn danger" id="btn-prune">Удалить</button>
+          </div>
+        </div>
+
+        <div class="tool">
+          <h3><i class="fa-solid fa-broom"></i> Очистить файлы</h3>
+          <p>Удаляет вложения, на которые больше не ссылается ни одно сообщение.</p>
+          <button class="btn" id="btn-sweep">Очистить</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------------- logs -->
+    <section class="panel hidden" data-panel="logs">
+      <div class="panel-head">
+        <h2><i class="fa-solid fa-file-lines"></i> Логи</h2>
+        <div class="inline-form">
+          <select id="log-lines" class="input">
+            <option value="100">100</option>
+            <option value="300" selected>300</option>
+            <option value="1000">1000</option>
+          </select>
+          <button class="btn sm" id="btn-logs-refresh"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+      </div>
+      <p class="hint" id="log-file"></p>
+      <pre class="log-view" id="log-view"></pre>
+    </section>
+
+  </main>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<div class="modal-scrim hidden" id="modal-scrim"></div>
+<div class="modal hidden" id="modal-edit-user">
+  <header class="modal-head">
+    <h2 id="edit-user-title">Пользователь</h2>
+    <button class="icon-btn" data-close><i class="fa-solid fa-xmark"></i></button>
+  </header>
+  <div class="modal-body">
+    <label class="field">
+      <span class="field-label">Отображаемое имя</span>
+      <div class="field-input"><input id="edit-user-name" type="text" maxlength="64"></div>
+    </label>
+    <label class="field">
+      <span class="field-label">Роль</span>
+      <div class="field-input">
+        <select id="edit-user-role" class="plain-select">
+          <option value="member">Участник</option>
+          <option value="admin">Администратор</option>
+          <option value="owner">Владелец</option>
+        </select>
+      </div>
+    </label>
+    <label class="switch">
+      <input type="checkbox" id="edit-user-banned">
+      <span>Заблокирован</span>
+    </label>
+  </div>
+  <footer class="modal-foot">
+    <button class="btn ghost" data-close>Отмена</button>
+    <button class="btn primary" id="btn-save-user">Сохранить</button>
+  </footer>
+</div>
+
+<script src="/assets/js/admin.js?v=__BUILD__"></script>
+</body>
+</html>

@@ -1,0 +1,364 @@
+/* =============================================================================
+   admin.css — the board is a separate document but reuses app.css tokens so a
+   rebranded install looks consistent on both sides.
+   ============================================================================= */
+
+body.admin {
+  overflow: auto;
+  background: var(--bg);
+}
+
+.hidden { display: none !important; }
+
+/* ------------------------------------------------------------------ login */
+
+.admin-login {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(1000px 500px at 20% -10%, rgba(0, 136, 255, 0.14), transparent 60%),
+    var(--bg);
+  overflow-y: auto;
+}
+.admin-login .login-card { max-width: 380px; }
+.admin-login .logo { font-size: 26px; }
+
+/* -------------------------------------------------------------- dashboard */
+
+.admin-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.admin-brand { display: flex; align-items: center; gap: 10px; }
+.admin-brand .logo.sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 15px;
+  margin: 0;
+  box-shadow: none;
+}
+.admin-brand strong { display: block; font-size: 15px; line-height: 1.2; }
+.admin-brand small { color: var(--text-faint); font-size: 11.5px; }
+
+.admin-tabs { display: flex; gap: 2px; flex: 1; flex-wrap: wrap; }
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border-radius: var(--r-sm);
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--text-dim);
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+  white-space: nowrap;
+}
+.tab i { font-size: 12px; }
+.tab:hover { background: var(--hover); color: var(--text); }
+.tab.active { background: var(--active); color: var(--accent); font-weight: 650; }
+
+.admin-actions { display: flex; gap: 2px; }
+
+.admin-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 20px 60px;
+}
+
+.panel { animation: fade 180ms var(--ease); }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.panel-head h2, .panel-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  font-size: 17px;
+  font-weight: 650;
+}
+.panel-head h2 { margin: 0; }
+.panel-head h2 i, .panel-title i { color: var(--accent); font-size: 14px; }
+
+.hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+.hint code {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- stats */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat {
+  padding: 16px;
+  border-radius: var(--r-md);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-label {
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+.stat.accent .stat-value { color: var(--accent); }
+
+/* ----------------------------------------------------------------- cards */
+
+.card {
+  padding: 18px;
+  margin-bottom: 16px;
+  border-radius: var(--r-md);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.card.flush { padding: 0; overflow: hidden; }
+.card h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.card h2 i { color: var(--accent); font-size: 12px; }
+
+.warn-list { margin: 0; padding-left: 20px; font-size: 13px; color: #F76808; line-height: 1.7; }
+.warn-list:empty::after { content: "Нет предупреждений"; color: var(--text-faint); }
+
+/* ---------------------------------------------------------------- tables */
+
+.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+
+.table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr { transition: background var(--fast) var(--ease); }
+.table tbody tr:hover { background: var(--hover); }
+
+.table .num { font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.table .muted { color: var(--text-faint); font-size: 12px; }
+.table .actions { display: flex; gap: 2px; justify-content: flex-end; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--panel-2);
+  color: var(--text-dim);
+}
+.chip.owner { background: rgba(0, 136, 255, 0.14); color: var(--accent); }
+.chip.admin { background: rgba(124, 92, 255, 0.14); color: #7C5CFF; }
+.chip.online { background: rgba(34, 197, 94, 0.14); color: #16A34A; }
+.chip.banned { background: rgba(229, 72, 77, 0.14); color: #E5484D; }
+.chip.private { background: rgba(247, 104, 8, 0.14); color: #F76808; }
+
+/* ---------------------------------------------------------------- config */
+
+.config-group { margin-bottom: 22px; }
+.config-group:last-child { margin-bottom: 0; }
+
+.config-group > h3 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.config-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(200px, 1.2fr);
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.config-row:last-child { border-bottom: 0; }
+.config-row label { font-size: 13px; color: var(--text-dim); font-family: var(--mono); font-size: 12px; }
+
+.input, .plain-select {
+  width: 100%;
+  padding: 8px 11px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  font-size: 13px;
+  outline: 0;
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.input:focus, .plain-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--active);
+}
+
+.color-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-input input[type="color"] {
+  width: 34px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.inline-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.inline-form .input { width: auto; min-width: 80px; }
+
+/* ----------------------------------------------------------- maintenance */
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.tool {
+  padding: 16px;
+  border-radius: var(--r-md);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tool h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+.tool h3 i { color: var(--accent); font-size: 12px; }
+.tool p { margin: 0 0 6px; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+.tool code { font-family: var(--mono); font-size: 11.5px; color: var(--accent); }
+.tool .btn { align-self: flex-start; }
+
+.backup-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 12px; }
+.backup-list div {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-radius: var(--r-xs);
+  background: var(--panel-2);
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------------ logs */
+
+.log-view {
+  margin: 0;
+  padding: 14px;
+  max-height: 62vh;
+  overflow: auto;
+  border-radius: var(--r-md);
+  background: #05080D;
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.65;
+  color: #C9D6E5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.log-view .lv-e { color: #FF6B6B; }
+.log-view .lv-w { color: #FFC062; }
+.log-view .lv-d, .log-view .lv-v { color: #7A8CA3; }
+
+/* ----------------------------------------------------------------- misc */
+
+.modal .field-input { background: var(--bg); }
+.plain-select { appearance: none; padding-right: 30px; }
+
+.btn.sm { padding: 7px 13px; font-size: 13px; }
+
+@media (max-width: 720px) {
+  .admin-head { gap: 10px; }
+  .admin-tabs { order: 3; width: 100%; overflow-x: auto; }
+  .admin-main { padding: 16px 12px 40px; }
+  .table th:nth-child(5), .table td:nth-child(5) { display: none; }
+  .config-row { grid-template-columns: 1fr; gap: 4px; }
+}

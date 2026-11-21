@@ -1,0 +1,32 @@
+Font Awesome Free 6.x
+https://fontawesome.com
+
+Bundled locally so Kroshka works with no internet access. Files in this folder
+are unmodified copies from the official distribution.
+
+--------------------------------------------------------------------------------
+ICONS: CC BY 4.0 License
+--------------------------------------------------------------------------------
+The Font Awesome icon set is licensed under the Creative Commons Attribution 4.0
+International license.
+
+https://creativecommons.org/licenses/by/4.0/
+
+Attribution: "Font Awesome Free by @fontawesome - https://fontawesome.com"
+
+--------------------------------------------------------------------------------
+FONTS: SIL OFL 1.1 License
+--------------------------------------------------------------------------------
+The Font Awesome font files (fa-solid-900, fa-regular-400, fa-brands-400, in
+both .woff2 and .ttf) are licensed under the SIL Open Font License 1.1.
+
+https://scripts.sil.org/OFL
+
+--------------------------------------------------------------------------------
+CODE: MIT License
+--------------------------------------------------------------------------------
+The CSS and JavaScript that make up Font Awesome are licensed under MIT.
+
+https://opensource.org/licenses/MIT
+
+Copyright (c) Fonticons, Inc.

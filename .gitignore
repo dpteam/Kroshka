@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------- build output
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ------------------------------------------------------------------ visual studio
+.vs/
+.vscode/
+.idea/
+*.DotSettings.user
+_ReSharper*/
+*.resharper
+
+# --------------------------------------------------------------- dotnet specific
+project.lock.json
+project.fragment.lock.json
+*.nuget.props
+*.nuget.targets
+*.deps.json
+*.runtimeconfig.json
+*.nupkg
+*.snupkg
+
+# -------------------------------------------------------------------- publishing
+src/**/bin/
+src/**/obj/
+bin/publish/
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# --------------------------------------------------------------------- data & logs
+# Runtime data must never be committed: it holds message history and identities.
+data/
+logs/
+*.log
+crash-*.txt
+config.ini
+!config.example.ini
+*.bak
+*.tmp
+*.bad-*
+
+# ------------------------------------------------------------------- web scratch
+web/assets/vendor/**/*.map
+node_modules/
+npm-debug.log*
+
+# ------------------------------------------------------------------------- system
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+._*
+
+# -------------------------------------------------------------------------- tools
+.tools/
+*.zip
+!docs/**/*.zip
