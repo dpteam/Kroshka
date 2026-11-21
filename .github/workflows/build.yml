@@ -69,22 +69,29 @@ jobs:
             project: src/DPT.Kroshka.Server/DPT.Kroshka.Server.csproj
             rid: win-x64
             role: server
+            artifact: kroshka-server-win-x64
           - name: server-linux-x64
             project: src/DPT.Kroshka.Server/DPT.Kroshka.Server.csproj
             rid: linux-x64
             role: server
+            artifact: kroshka-server-linux-x64
           - name: client-win-x64
             project: src/DPT.Kroshka.Client/DPT.Kroshka.Client.csproj
             rid: win-x64
             role: client
+            artifact: kroshka-client-win-x64
+          # The Linux build is client and server in one binary, so it is named
+          # plainly after the platform rather than "client-".
           - name: linux-x64
             project: src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj
             rid: linux-x64
             role: client
+            artifact: kroshka-linux-x64
           - name: linux-arm64
             project: src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj
             rid: linux-arm64
             role: client
+            artifact: kroshka-linux-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -137,7 +144,7 @@ jobs:
         if: ${{ !startsWith(matrix.rid, 'linux') }}
         shell: pwsh
         run: |
-          $name = "kroshka-${{ matrix.role }}-${{ matrix.rid }}"
+          $name = "${{ matrix.artifact }}"
           Compress-Archive -Path out/* -DestinationPath "$name.zip" -CompressionLevel Optimal
           Write-Host "$name.zip -> $([Math]::Round((Get-Item "$name.zip").Length / 1MB, 1)) MB"
 
@@ -147,7 +154,7 @@ jobs:
         run: |
           # tar.gz, not zip: zip drops the execute bit and ./kroshka would refuse
           # to start after extraction. tar also keeps install.sh executable.
-          name="kroshka-${{ matrix.role }}-${{ matrix.rid }}"
+          name="${{ matrix.artifact }}"
 
           # install.sh must use LF endings or bash fails with "bad interpreter".
           sed -i 's/\r$//' out/install.sh
@@ -159,10 +166,10 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kroshka-${{ matrix.role }}-${{ matrix.rid }}
+          name: ${{ matrix.artifact }}
           path: |
-            kroshka-${{ matrix.role }}-${{ matrix.rid }}.zip
-            kroshka-${{ matrix.role }}-${{ matrix.rid }}.tar.gz
+            ${{ matrix.artifact }}.zip
+            ${{ matrix.artifact }}.tar.gz
           if-no-files-found: ignore
           retention-days: 30
 
