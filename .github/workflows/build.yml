@@ -3,6 +3,9 @@ name: build
 on:
   push:
     branches: [main, master]
+    # Tags must be listed explicitly: `branches:` alone means tag pushes never
+    # trigger a run, so the release job below would never execute.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
