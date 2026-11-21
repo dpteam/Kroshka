@@ -13,7 +13,7 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Fast gate: does it compile and do the storage invariants still hold?
+  # Fast gate: does it compile and do the invariants still hold?
   # Everything else waits on this, so a broken commit never burns publish time.
   # ---------------------------------------------------------------------------
   test:
@@ -35,10 +35,10 @@ jobs:
       - name: Build
         run: dotnet build Kroshka.sln -c Release --no-restore
 
-      - name: Self-test (storage, config, crypto, sessions)
+      - name: "Self-test: server (storage, config, crypto, sessions)"
         run: dotnet run --project src/DPT.Kroshka.Server/DPT.Kroshka.Server.csproj -c Release --no-build -- --selftest
 
-      - name: "Self-test (Linux client: paths, urls, browser, desktop files)"
+      - name: "Self-test: Linux client (xdg, urls, browser, desktop files)"
         run: dotnet run --project src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj -c Release --no-build -- --selftest
 
       - name: Upload self-test log
@@ -46,20 +46,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: selftest
-          path: |
-            src/DPT.Kroshka.Server/bin/Release/net10.0/logs/*.log
+          path: src/DPT.Kroshka.Server/bin/Release/net10.0/logs/*.log
           if-no-files-found: ignore
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # Publish: three artifacts, one per thing a user actually downloads.
+  # Windows artifacts. Split from the Linux job on purpose: one job per runner
+  # means a failure names the platform, and neither half can break the other.
   # ---------------------------------------------------------------------------
-  publish:
-    name: publish ${{ matrix.name }}
+  publish-windows:
+    name: publish windows
     needs: test
-    # Linux artifacts are packaged on a Linux runner so tar/chmod behave natively;
-    # Windows ones stay on Windows. Cross-compiling itself works from either.
-    runs-on: ${{ startsWith(matrix.rid, 'linux') && 'ubuntu-latest' || 'windows-latest' }}
+    runs-on: windows-latest
 
     strategy:
       fail-fast: false
@@ -67,31 +65,12 @@ jobs:
         include:
           - name: server-win-x64
             project: src/DPT.Kroshka.Server/DPT.Kroshka.Server.csproj
-            rid: win-x64
-            role: server
             artifact: kroshka-server-win-x64
-          - name: server-linux-x64
-            project: src/DPT.Kroshka.Server/DPT.Kroshka.Server.csproj
-            rid: linux-x64
-            role: server
-            artifact: kroshka-server-linux-x64
+            exe: KroshkaServer.exe
           - name: client-win-x64
             project: src/DPT.Kroshka.Client/DPT.Kroshka.Client.csproj
-            rid: win-x64
-            role: client
             artifact: kroshka-client-win-x64
-          # The Linux build is client and server in one binary, so it is named
-          # plainly after the platform rather than "client-".
-          - name: linux-x64
-            project: src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj
-            rid: linux-x64
-            role: client
-            artifact: kroshka-linux-x64
-          - name: linux-arm64
-            project: src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj
-            rid: linux-arm64
-            role: client
-            artifact: kroshka-linux-arm64
+            exe: Kroshka.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -106,12 +85,12 @@ jobs:
         run: >
           dotnet publish ${{ matrix.project }}
           -c Release
-          -r ${{ matrix.rid }}
+          -r win-x64
           --self-contained true
           -p:PublishSingleFile=false
           -o out
 
-      - name: Add runtime files (web, config, docs)
+      - name: Add runtime files
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out/web | Out-Null
@@ -119,67 +98,116 @@ jobs:
           Copy-Item -Force config.example.ini out/
           Copy-Item -Force LICENSE out/ -ErrorAction SilentlyContinue
           Copy-Item -Force README.md out/ -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path out/data, out/logs | Out-Null
           Remove-Item -Force out/*.pdb -ErrorAction SilentlyContinue
 
-          $isLinux = '${{ matrix.rid }}'.StartsWith('linux')
-          if ($isLinux) {
-            # The Linux client ships an installer script and themed icons.
-            Copy-Item -Force linux/install.sh out/
-            New-Item -ItemType Directory -Force -Path out/icons | Out-Null
-            Copy-Item -Force web/assets/img/logo-192.png out/icons/kroshka-192.png
-            Copy-Item -Force web/assets/img/logo-512.png out/icons/kroshka-512.png
-          } else {
-            New-Item -ItemType Directory -Force -Path out/data, out/logs | Out-Null
-          }
-
-          # Prove the archive is not empty before we bother uploading it.
-          $exe = if ('${{ matrix.role }}' -eq 'server') {
-            if ($isLinux) { 'out/KroshkaServer' } else { 'out/KroshkaServer.exe' }
-          } elseif ($isLinux) { 'out/kroshka' } else { 'out/Kroshka.exe' }
-
+          # Prove the archive is not empty before uploading it.
+          $exe = "out/${{ matrix.exe }}"
           if (-not (Test-Path $exe)) { throw "missing $exe" }
           Write-Host "verified $exe ($([Math]::Round((Get-Item $exe).Length / 1MB, 1)) MB)"
 
-      - name: "Package (Windows: zip)"
-        if: ${{ !startsWith(matrix.rid, 'linux') }}
+      - name: Zip
         shell: pwsh
         run: |
           $name = "${{ matrix.artifact }}"
           Compress-Archive -Path out/* -DestinationPath "$name.zip" -CompressionLevel Optimal
           Write-Host "$name.zip -> $([Math]::Round((Get-Item "$name.zip").Length / 1MB, 1)) MB"
 
-      - name: "Package (Linux: tar.gz)"
-        if: ${{ startsWith(matrix.rid, 'linux') }}
-        shell: bash
-        run: |
-          # tar.gz, not zip: zip drops the execute bit and ./kroshka would refuse
-          # to start after extraction. tar also keeps install.sh executable.
-          name="${{ matrix.artifact }}"
-
-          # install.sh must use LF endings or bash fails with "bad interpreter".
-          sed -i 's/\r$//' out/install.sh
-          chmod +x out/kroshka out/install.sh
-
-          tar -czf "$name.tar.gz" -C out .
-          echo "$name.tar.gz -> $(du -h "$name.tar.gz" | cut -f1)"
-
-      - name: Upload artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: |
-            ${{ matrix.artifact }}.zip
-            ${{ matrix.artifact }}.tar.gz
-          if-no-files-found: ignore
+          path: ${{ matrix.artifact }}.zip
           retention-days: 30
 
   # ---------------------------------------------------------------------------
-  # The installer: the artifact most people actually download. Built on Windows
-  # because Inno Setup is Windows-only, from the same published client folder.
+  # Linux artifacts, built and packaged on a Linux runner: tar and chmod behave
+  # natively, so the execute bit and the LF endings of install.sh survive.
+  # ---------------------------------------------------------------------------
+  publish-linux:
+    name: publish linux (${{ matrix.arch }})
+    needs: test
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The Linux build is client and server in one binary.
+          - arch: x64
+            rid: linux-x64
+            artifact: kroshka-linux-x64
+          - arch: arm64
+            rid: linux-arm64
+            artifact: kroshka-linux-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Publish
+        run: >
+          dotnet publish src/DPT.Kroshka.Linux/DPT.Kroshka.Linux.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=false
+          -o out
+
+      - name: Add runtime files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p out/web out/icons
+          cp -r web/. out/web/
+          cp config.example.ini out/
+          cp LICENSE out/ 2>/dev/null || true
+          cp README.md out/ 2>/dev/null || true
+          cp linux/install.sh out/
+          cp linux/README.md out/LINUX.md 2>/dev/null || true
+
+          cp web/assets/img/logo-192.png out/icons/kroshka-192.png
+          cp web/assets/img/logo-512.png out/icons/kroshka-512.png
+
+          rm -f out/*.pdb
+
+          # install.sh must have LF endings or bash fails with "bad interpreter".
+          sed -i 's/\r$//' out/install.sh
+          chmod +x out/kroshka out/install.sh
+
+          test -x out/kroshka || { echo "::error::kroshka is not executable"; exit 1; }
+          echo "verified out/kroshka ($(du -h out/kroshka | cut -f1))"
+
+      - name: Package tar.gz
+        shell: bash
+        run: |
+          set -euo pipefail
+          # tar.gz, not zip: zip drops the execute bit and ./kroshka would refuse
+          # to start after extraction.
+          name="${{ matrix.artifact }}"
+          tar -czf "$name.tar.gz" -C out .
+          echo "$name.tar.gz -> $(du -h "$name.tar.gz" | cut -f1)"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # The installer: the artifact most people actually download. Windows only,
+  # because Inno Setup is Windows only.
   # ---------------------------------------------------------------------------
   installer:
-    name: installer (win-x64)
-    needs: publish
+    name: installer
+    needs: [publish-windows]
     runs-on: windows-latest
 
     steps:
@@ -191,27 +219,28 @@ jobs:
           dotnet-version: '10.0.x'
           dotnet-quality: 'preview'
 
-      - name: Publish the client (self-contained)
+      - name: Publish the client
         run: >
           dotnet publish src/DPT.Kroshka.Client/DPT.Kroshka.Client.csproj
           -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=false
           -o bin/self/client-win-x64
 
-      - name: Publish the server (self-contained)
+      - name: Publish the server
         run: >
           dotnet publish src/DPT.Kroshka.Server/DPT.Kroshka.Server.csproj
           -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=false
           -o bin/self/server-win-x64
 
-      - name: Add runtime files to both
+      - name: Add runtime files
         shell: pwsh
         run: |
           foreach ($dir in @('bin/self/client-win-x64', 'bin/self/server-win-x64')) {
             New-Item -ItemType Directory -Force -Path "$dir/web" | Out-Null
             Copy-Item -Recurse -Force web/* "$dir/web/"
             New-Item -ItemType Directory -Force -Path "$dir/data", "$dir/logs" | Out-Null
+            Remove-Item -Force "$dir/*.pdb" -ErrorAction SilentlyContinue
           }
 
       - name: Install Inno Setup
@@ -220,7 +249,7 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: |
-          # The version comes from the tag when releasing, otherwise from the csproj.
+          # A tag decides the version; a branch build is explicitly not a release.
           $version = if ($env:GITHUB_REF -like 'refs/tags/v*') {
             $env:GITHUB_REF -replace '^refs/tags/v', ''
           } else { '0.0.0-ci' }
@@ -228,14 +257,21 @@ jobs:
           $env:KROSHKA_VERSION = $version
           Write-Host "installer version: $version"
 
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\kroshka.iss
+          $iscc = @(
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+            'C:\Program Files\Inno Setup 6\ISCC.exe'
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+          if (-not $iscc) { throw "ISCC.exe not found after install" }
+
+          & $iscc installer\kroshka.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
 
           $setup = Get-ChildItem artifacts/kroshka-*-setup.exe
           if (-not $setup) { throw "installer was not produced" }
           Write-Host "$($setup.Name) -> $([Math]::Round($setup.Length / 1MB, 1)) MB"
 
-      - name: Upload installer
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: kroshka-installer-win-x64
@@ -245,17 +281,15 @@ jobs:
   # ---------------------------------------------------------------------------
   # A tag turns the artifacts into a GitHub release.
   #
-  # The tag name decides the kind:
   #   v1.0.0        -> normal release
   #   v1.0.0-rc1    -> pre-release (anything with a suffix)
-  #   v1.0.0-beta2  -> pre-release
   #
   # So "ship a pre-release now, promote it later" is just a second tag with the
   # suffix dropped, no hand-editing of the release page.
   # ---------------------------------------------------------------------------
   release:
     name: release
-    needs: [publish, installer]
+    needs: [publish-windows, publish-linux, installer]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
