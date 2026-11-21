@@ -11,6 +11,7 @@
 
 <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css?v=__BUILD__">
 <link rel="stylesheet" href="/assets/css/app.css?v=__BUILD__">
+<link rel="stylesheet" href="/assets/css/settings.css?v=__BUILD__">
 </head>
 <body class="booting">
 
@@ -394,6 +395,150 @@
   <div class="toasts" id="toasts" aria-live="polite"></div>
 </div>
 
+  <!-- ------------------------------------------------------------ settings -->
+  <!--
+       Settings are a sibling of #app, not a child of it.
+
+       #app carries class="app hidden" until someone logs in, and display:none
+       collapses every descendant: a fixed-position panel inside it measured
+       0x0 and painted nothing, which looked exactly like "settings do not open".
+
+       Keeping it at body level also means the panel is reachable before login,
+       which is what --settings needs.
+  -->
+  <section id="settings-view" class="hidden" aria-label="Настройки">
+
+    <header class="settings-head">
+      <div class="settings-mark"><i class="fa-solid fa-gear"></i></div>
+      <div class="settings-title">
+        <h1>Настройки</h1>
+        <p>Где живёт чат и как ведёт себя окно</p>
+      </div>
+      <button class="icon-btn" id="settings-close" title="Закрыть">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </header>
+
+    <div class="settings-body">
+
+      <section class="settings-block">
+        <h2><i class="fa-solid fa-server"></i> Сервер</h2>
+
+        <div class="settings-choices" role="radiogroup" aria-label="Расположение сервера">
+          <button class="settings-choice selected" id="settings-mode-local" type="button" role="radio" aria-checked="true">
+            <span class="settings-choice-icon"><i class="fa-solid fa-house-laptop"></i></span>
+            <span class="settings-choice-body">
+              <strong>На этом компьютере</strong>
+              <span>Клиент запустит сервер сам. Подходит, если этот ПК и есть «дом» для чата.</span>
+            </span>
+            <i class="fa-solid fa-circle-check settings-choice-check"></i>
+          </button>
+
+          <button class="settings-choice" id="settings-mode-remote" type="button" role="radio" aria-checked="false">
+            <span class="settings-choice-icon"><i class="fa-solid fa-tower-broadcast"></i></span>
+            <span class="settings-choice-body">
+              <strong>Подключаться к серверу в сети</strong>
+              <span>Другая машина в локальной сети или через ZeroTier.</span>
+            </span>
+            <i class="fa-solid fa-circle-check settings-choice-check"></i>
+          </button>
+        </div>
+
+        <div class="settings-field hidden" id="settings-address-field">
+          <label for="settings-url">Адрес сервера</label>
+          <div class="settings-input">
+            <i class="fa-solid fa-link"></i>
+            <input id="settings-url" type="text" placeholder="192.168.1.250"
+                   autocapitalize="none" autocorrect="off" spellcheck="false">
+            <button class="settings-clear hidden" id="settings-clear-url" type="button" title="Очистить">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <p class="settings-hint">
+            Можно писать как угодно: <code>192.168.1.250</code>,
+            <code>192.168.1.250:6767</code> или <code>http://192.168.1.250:6767</code>.
+          </p>
+
+          <!-- Discovered servers: one broadcast, every server answers. -->
+          <div class="lan-block" id="settings-lan">
+            <div class="lan-head">
+              <span class="lan-title">Найденные серверы</span>
+              <button class="lan-refresh" id="settings-lan-scan" type="button">
+                <i class="fa-solid fa-rotate"></i> Искать
+              </button>
+            </div>
+            <div class="lan-list" id="settings-lan-list">
+              <p class="lan-empty" id="settings-lan-empty">
+                Нажмите «Искать» — серверы в этой сети отзовутся сами.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-field" id="settings-port-field">
+          <label for="settings-port">Порт локального сервера</label>
+          <div class="settings-input narrow">
+            <i class="fa-solid fa-plug"></i>
+            <input id="settings-port" type="number" min="1024" max="65535" step="1" value="6767">
+          </div>
+          <p class="settings-hint">6767 по умолчанию. Меняйте, только если порт занят.</p>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h2><i class="fa-solid fa-window-restore"></i> Поведение</h2>
+
+        <label class="settings-row">
+          <span class="settings-row-text">
+            <strong>Закрывать в трей</strong>
+            <span>Крестик прячет окно, а не завершает приложение</span>
+          </span>
+          <span class="switch">
+            <input type="checkbox" id="settings-close-to-tray">
+            <span></span>
+          </span>
+        </label>
+
+        <label class="settings-row">
+          <span class="settings-row-text">
+            <strong>Уведомления</strong>
+            <span>Показывать всплывающие сообщения о новых письмах</span>
+          </span>
+          <span class="switch">
+            <input type="checkbox" id="settings-notifications">
+            <span></span>
+          </span>
+        </label>
+
+        <label class="settings-row">
+          <span class="settings-row-text">
+            <strong>Запускать с Windows</strong>
+            <span>Kroshka будет ждать в трее сразу после входа</span>
+          </span>
+          <span class="switch">
+            <input type="checkbox" id="settings-autostart">
+            <span></span>
+          </span>
+        </label>
+      </section>
+
+      <div class="settings-notice hidden" id="settings-notice"></div>
+
+    </div>
+
+    <footer class="settings-foot">
+      <span class="settings-version" id="settings-version"></span>
+      <div class="settings-buttons">
+        <button class="btn ghost" id="settings-cancel" type="button">Отмена</button>
+        <button class="btn primary" id="settings-save" type="button">
+          <i class="fa-solid fa-check"></i> Сохранить
+        </button>
+      </div>
+    </footer>
+  </section>
+
+  <!-- -------------------------------------------------------------- modals -->
+<script src="/assets/js/serverurl.js?v=__BUILD__"></script>
 <script src="/assets/js/api.js?v=__BUILD__"></script>
 <script src="/assets/js/sound.js?v=__BUILD__"></script>
 <script src="/assets/js/ui.js?v=__BUILD__"></script>

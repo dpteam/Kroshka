@@ -194,6 +194,17 @@ public sealed class KroshkaConfig
     public bool TrustProxy = false;
     public int Backlog = 512;
 
+    // ------------------------------------------------------------- discovery
+    /// <summary>
+    /// Answer LAN probes so clients can find this server without typing an IP.
+    /// Off by default on a public host: announcing yourself to every device on
+    /// the wire is not something a stranger should opt you into.
+    /// </summary>
+    public bool Discoverable = true;
+
+    /// <summary>UDP port the probe travels on. Shares the number with TCP by design.</summary>
+    public int DiscoveryPort = 6767;
+
     // ------------------------------------------------------------------- site
     public string SiteName = "Kroshka";
     public string SiteShort = "K";
@@ -339,6 +350,10 @@ public sealed class KroshkaConfig
         RequestTimeoutSec = ini.GetInt("server", "requestTimeoutSec", RequestTimeoutSec);
         TrustProxy = ini.GetBool("server", "trustProxy", TrustProxy);
         Backlog = ini.GetInt("server", "backlog", Backlog);
+
+        // ---------------------------------------------------------- discovery
+        Discoverable = ini.GetBool("server", "discoverable", Discoverable);
+        DiscoveryPort = ini.GetInt("server", "discoveryPort", DiscoveryPort);
 
         // --------------------------------------------------------------- site
         SiteName = ini.Get("site", "name", SiteName);
@@ -491,6 +506,7 @@ public sealed class KroshkaConfig
         if (string.IsNullOrWhiteSpace(AdminBind)) AdminBind = Bind;
 
         MaxUploadMb = Math.Clamp(MaxUploadMb, 1, 1024);
+        DiscoveryPort = Math.Clamp(DiscoveryPort, 1024, 65535);
         MaxMessageLen = Math.Clamp(MaxMessageLen, 200, 100000);
         MessagesPageSize = Math.Clamp(MessagesPageSize, 10, 200);
         KeepBackups = Math.Clamp(KeepBackups, 1, 365);
@@ -534,6 +550,7 @@ public sealed class KroshkaConfig
         "features.files", "features.search", "features.typing", "features.presence",
         "features.edit", "features.delete", "features.rooms", "features.dm",
         "limits.maxMessageLen", "limits.maxUploadMb",
-        "storage.pruneMonths", "storage.keepBackups"
+        "storage.pruneMonths", "storage.keepBackups",
+        "server.discoverable"
     };
 }

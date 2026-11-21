@@ -13,6 +13,7 @@ internal static class Program
     private const string MutexName = @"Local\Kroshka.Client.SingleInstance";
     private const string ShowEventName = @"Local\Kroshka.Client.Show";
     private const string EventWaitHandleName = ShowEventName;
+    private const string SettingsEventName = @"Local\Kroshka.Client.Settings";
 
     [STAThread]
     private static int Main(string[] args)
@@ -21,11 +22,16 @@ internal static class Program
             a.Equals("--minimized", StringComparison.OrdinalIgnoreCase) ||
             a.Equals("-m", StringComparison.OrdinalIgnoreCase));
 
+        // Opens the settings dialog immediately. Handy for a shortcut, and the
+        // only way to reach the dialog on a machine where the tray is hidden.
+        bool openSettings = args.Any(a =>
+            a.Equals("--settings", StringComparison.OrdinalIgnoreCase));
+
         using Mutex mutex = new(true, MutexName, out bool isFirst);
 
         if (!isFirst)
         {
-            SignalExistingInstance();
+            SignalExistingInstance(openSettings);
             return 0;
         }
 
@@ -55,15 +61,24 @@ internal static class Program
         };
 
         using EventWaitHandle showEvent = new(false, EventResetMode.AutoReset, EventWaitHandleName);
-        KroshkaContext context = new(minimized);
+        using EventWaitHandle settingsEvent = new(false, EventResetMode.AutoReset, SettingsEventName);
+        KroshkaContext context = new(minimized, openSettings);
 
-        // A second launch sets the event; this thread raises the existing window.
+        // A second launch raises one of these; the running instance reacts. Two
+        // events instead of one plus a payload keeps the inter-process contract
+        // to a single bit each, which is all this needs.
         Thread listener = new(() =>
         {
             while (true)
             {
-                if (!showEvent.WaitOne()) continue;
-                try { context.RequestShow(); } catch { }
+                int signaled = WaitHandle.WaitAny(new WaitHandle[] { showEvent, settingsEvent });
+
+                try
+                {
+                    if (signaled == 1) context.RequestSettings();
+                    else context.RequestShow();
+                }
+                catch { }
             }
         })
         {
@@ -80,11 +95,13 @@ internal static class Program
     /// Tells the running instance to show itself. A named event is enough here; there
     /// is no need to marshal data between processes for a single-window app.
     /// </summary>
-    private static void SignalExistingInstance()
+    private static void SignalExistingInstance(bool settings)
     {
+        string name = settings ? SettingsEventName : ShowEventName;
+
         try
         {
-            if (EventWaitHandle.TryOpenExisting(ShowEventName, out EventWaitHandle handle))
+            if (EventWaitHandle.TryOpenExisting(name, out EventWaitHandle handle))
             {
                 handle.Set();
                 handle.Dispose();

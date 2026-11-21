@@ -21,6 +21,9 @@ public sealed class ClientConfig
     public bool CloseToTray = true;
     public bool StartWithWindows = false;
     public bool Notifications = true;
+
+    /// <summary>UDP port used by the LAN discovery probe.</summary>
+    public int DiscoveryPort = 6767;
     public string WebViewDataDir = "";     // empty = %LOCALAPPDATA%\Kroshka\WebView2
 
     public static string Dir
@@ -54,6 +57,7 @@ public sealed class ClientConfig
             cfg.StartWithWindows = ini.GetBool("client", "startWithWindows", cfg.StartWithWindows);
             cfg.Notifications = ini.GetBool("client", "notifications", cfg.Notifications);
             cfg.WebViewDataDir = ini.Get("client", "webViewDataDir", cfg.WebViewDataDir);
+            cfg.DiscoveryPort = ini.GetInt("client", "discoveryPort", cfg.DiscoveryPort);
         }
         catch (Exception ex)
         {
@@ -83,6 +87,7 @@ public sealed class ClientConfig
                 $"closeToTray={(CloseToTray ? "true" : "false")}\r\n" +
                 $"startWithWindows={(StartWithWindows ? "true" : "false")}\r\n" +
                 $"notifications={(Notifications ? "true" : "false")}\r\n" +
+                $"discoveryPort={DiscoveryPort}\r\n" +
                 $"webViewDataDir={WebViewDataDir}\r\n";
 
             FileStore.WriteAtomic(ConfigPath, text);

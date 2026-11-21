@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Text.Json;
 using System.Windows.Forms;
 using DPT.Kroshka.Shared;
 
@@ -18,10 +19,31 @@ public sealed class KroshkaContext : ApplicationContext
     private Task _serverTask;
     private bool _exiting;
     private string _url;
+    private readonly bool _openSettingsOnStart;
 
-    public KroshkaContext(bool startMinimized)
+    /// <summary>
+    /// The UI thread's synchronization context, captured in the constructor.
+    ///
+    /// This is the actual fix for the blank windows: WebView2 requires its
+    /// environment AND every controller to be created on one thread that pumps
+    /// messages. StartAsync runs on the thread pool after its first await, so
+    /// creating the environment there made every later controller creation fail
+    /// with E_ABORT - a blank window and no visible error.
+    ///
+    /// Captured here because the constructor runs on the STA thread from
+    /// Application.Run. Checking InvokeRequired instead is not enough: before the
+    /// form's handle exists it reports false, so work would run on the wrong
+    /// thread anyway.
+    /// </summary>
+    private readonly SynchronizationContext _ui;
+
+    public KroshkaContext(bool startMinimized, bool openSettingsOnStart = false)
     {
         _client = ClientConfig.Load();
+        _openSettingsOnStart = openSettingsOnStart;
+
+        // Capture the UI context before anything can hop threads.
+        _ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
         _tray = new TrayHost();
         _tray.OpenRequested += (_, _) => ShowWindow();
@@ -32,6 +54,8 @@ public sealed class KroshkaContext : ApplicationContext
         _form = new MainForm(SetStatus) { TrayHost = _tray };
         _form.HiddenToTray += (_, _) => HideToTray();
         _form.ReallyClosing += (_, _) => Exit();
+        _form.ServerChosen += (_, url) => RememberServer(url);
+        _form.SettingsSaved += (_, json) => ApplySettings(json);
 
         _tray.SetStatus("запуск…");
 
@@ -47,23 +71,33 @@ public sealed class KroshkaContext : ApplicationContext
     {
         try
         {
+            // Everything before this line may run on a thread-pool thread: starting
+            // Kestrel and probing it are pure async work. Every touch of a WinForms
+            // control after it MUST come back to the UI thread, otherwise the WebView2
+            // controller is created on the wrong thread and the window stays blank
+            // until some unrelated event forces a repaint.
             _url = await ResolveUrlAsync();
 
-            bool loaded = await _form.InitialiseAsync(_url);
-
-            if (!loaded)
+            await OnUiAsync(async () =>
             {
-                _tray.SetStatus("ошибка запуска");
-            }
-            else
-            {
-                _tray.SetStatus(_client.Mode == "local"
-                    ? $"локальный сервер, порт {PortOf(_url)}"
-                    : "подключено к " + _url);
-            }
+                bool loaded = await _form.InitialiseAsync(_url);
 
-            if (startMinimized || _client.StartMinimized) HideToTray();
-            else ShowWindow();
+                if (!loaded)
+                {
+                    _tray.SetStatus("ошибка запуска");
+                }
+                else
+                {
+                    _tray.SetStatus(_client.Mode == "local"
+                        ? $"локальный сервер, порт {PortOf(_url)}"
+                        : "подключено к " + _url);
+                }
+
+                if (startMinimized || _client.StartMinimized) HideToTray();
+                else ShowWindow();
+
+                if (_openSettingsOnStart) ShowSettings();
+            });
         }
         catch (Exception ex)
         {
@@ -72,8 +106,57 @@ public sealed class KroshkaContext : ApplicationContext
             Log.Error("CLIENT", ex);
             _tray.SetStatus("ошибка запуска");
             _tray.ShowBalloon("Kroshka", "Не удалось запустить: " + ex.Message);
-            ShowWindow();
+            OnUi(ShowWindow);
         }
+    }
+
+    /// <summary>
+    /// Runs an action on the UI thread and waits for it.
+    ///
+    /// Uses the captured SynchronizationContext rather than InvokeRequired:
+    /// before the form's handle exists InvokeRequired reports false even when we
+    /// are on a pool thread, which is exactly how the WebView ended up being
+    /// created on the wrong thread.
+    /// </summary>
+    private Task OnUiAsync(Func<Task> action)
+    {
+        TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        try
+        {
+            _ui.Post(async _ =>
+            {
+                try
+                {
+                    await action();
+                    completion.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    completion.TrySetException(ex);
+                }
+            }, null);
+        }
+        catch (Exception ex)
+        {
+            completion.TrySetException(ex);
+        }
+
+        return completion.Task;
+    }
+
+    /// <summary>Fire-and-forget variant for the paths that cannot await.</summary>
+    private void OnUi(Action action)
+    {
+        try
+        {
+            _ui.Post(_ =>
+            {
+                try { action(); }
+                catch (Exception ex) { Log.Warn("CLIENT", "ui action: " + ex.Message); }
+            }, null);
+        }
+        catch { }
     }
 
     /// <summary>
@@ -183,6 +266,13 @@ public sealed class KroshkaContext : ApplicationContext
         ShowWindow();
     }
 
+    /// <summary>Thread-safe "open settings", for a second instance launched with --settings.</summary>
+    public void RequestSettings()
+    {
+        if (_form.IsDisposed) return;
+        ShowSettings();
+    }
+
     private void HideToTray()
     {
         if (_form.IsDisposed) return;
@@ -197,25 +287,130 @@ public sealed class KroshkaContext : ApplicationContext
         _tray.SetStatus(string.IsNullOrWhiteSpace(text) ? "работает" : text);
     }
 
+    /// <summary>
+    /// The page picked a remote server. Store it in client.ini so the next launch
+    /// skips the picker and connects directly; the current session already talks
+    /// to it, so nothing needs restarting now.
+    /// </summary>
+    private void RememberServer(string url)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(url)) return;
+            if (string.Equals(_client.ServerUrl, url, StringComparison.OrdinalIgnoreCase) &&
+                _client.Mode == "remote")
+                return;
+
+            _client.Mode = "remote";
+            _client.ServerUrl = url;
+            _client.Save();
+
+            Log.Info("CLIENT", "remembered server " + url);
+            _tray.SetStatus("подключено к " + url);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("CLIENT", "cannot remember server: " + ex.Message);
+        }
+    }
+
     // ----------------------------------------------------------------- settings
 
+    /// <summary>
+    /// Opens the settings page inside the main WebView.
+    ///
+    /// There is no second window and no second WebView2 on purpose. Creating a
+    /// second controller in the same process while the first is live is what
+    /// produced E_ABORT and a permanently blank dialog; a page in the existing
+    /// WebView has none of those failure modes and matches the rest of the UI
+    /// exactly, because it *is* the rest of the UI.
+    /// </summary>
     private void ShowSettings()
     {
-        using SettingsForm dialog = new(_client);
-        if (dialog.ShowDialog() != DialogResult.OK) return;
+        OnUi(() =>
+        {
+            ShowWindow();
 
-        _client.Mode = dialog.Mode;
-        _client.ServerUrl = dialog.ServerUrl;
-        _client.LocalPort = dialog.LocalPort;
-        _client.CloseToTray = dialog.CloseToTray;
-        _client.Notifications = dialog.Notifications;
-        _client.StartWithWindows = dialog.StartWithWindows;
-        _client.Save();
+            string json = JsonSerializer.Serialize(new
+            {
+                mode = _client.Mode,
+                serverUrl = _client.ServerUrl ?? "",
+                localPort = _client.LocalPort,
+                closeToTray = _client.CloseToTray,
+                notifications = _client.Notifications,
+                startWithWindows = _client.StartWithWindows,
+                version = typeof(KroshkaContext).Assembly.GetName().Version?.ToString(3) ?? ""
+            });
 
-        Autostart.Apply(_client.StartWithWindows);
+            _form.ShowSettingsPage(json);
+        });
+    }
 
-        toast("Настройки сохранены. Перезапускаю сервер…");
-        _ = RestartServerAsync();
+    /// <summary>
+    /// Persists what the page submitted. The page already validated the address,
+    /// so this only maps JSON to ClientConfig and applies the side effects.
+    /// </summary>
+    private void ApplySettings(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return;
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            JsonElement root = document.RootElement;
+
+            string mode = ReadString(root, "mode") ?? _client.Mode;
+            string serverUrl = ReadString(root, "serverUrl") ?? "";
+            int port = ReadInt(root, "localPort", _client.LocalPort);
+
+            if (port is < 1024 or > 65535) port = 6767;
+
+            _client.Mode = mode == "remote" ? "remote" : "local";
+            _client.ServerUrl = serverUrl;
+            _client.LocalPort = port;
+            _client.CloseToTray = ReadBool(root, "closeToTray", _client.CloseToTray);
+            _client.Notifications = ReadBool(root, "notifications", _client.Notifications);
+            _client.StartWithWindows = ReadBool(root, "startWithWindows", _client.StartWithWindows);
+            _client.Save();
+
+            Autostart.Apply(_client.StartWithWindows);
+
+            Log.Info("CLIENT",
+                $"settings saved: mode={_client.Mode} url={_client.ServerUrl} port={_client.LocalPort}");
+
+            _ = RestartServerAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("CLIENT", ex);
+            _tray.ShowBalloon("Kroshka", "Не удалось сохранить настройки: " + ex.Message);
+        }
+    }
+
+    private static string ReadString(JsonElement element, string name)
+    {
+        return element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+    }
+
+    private static bool ReadBool(JsonElement element, string name, bool fallback)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value)) return fallback;
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => fallback
+        };
+    }
+
+    private static int ReadInt(JsonElement element, string name, int fallback)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value)) return fallback;
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int number)
+            ? number
+            : fallback;
     }
 
     private void RestartServer()

@@ -411,7 +411,8 @@
     'limits.maxMessageLen': 'Лимит сообщения',
     'limits.maxUploadMb': 'Лимит файла, МБ',
     'storage.pruneMonths': 'Хранить, мес.',
-    'storage.keepBackups': 'Копий хранить'
+    'storage.keepBackups': 'Копий хранить',
+    'server.discoverable': 'Видимость в локальной сети'
   };
 
   const GROUPS = {
@@ -422,7 +423,8 @@
                 'features.files', 'features.search', 'features.typing', 'features.presence',
                 'features.edit', 'features.delete', 'features.rooms', 'features.dm'],
     'Лимиты': ['limits.maxMessageLen', 'limits.maxUploadMb'],
-    'Хранение': ['storage.pruneMonths', 'storage.keepBackups']
+    'Хранение': ['storage.pruneMonths', 'storage.keepBackups'],
+    'Сеть': ['server.discoverable']
   };
 
   async function loadConfig() {

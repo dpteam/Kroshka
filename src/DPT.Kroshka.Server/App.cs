@@ -54,6 +54,7 @@ public sealed class App : IAsyncDisposable
     private WebApplication _admin;
     private CancellationTokenSource _cts;
     private Task _maintenance;
+    private DiscoveryService _discovery;
 
     public int PublicPort { get; private set; }
     public int AdminPort { get; private set; }
@@ -127,6 +128,11 @@ public sealed class App : IAsyncDisposable
 
         _cts = new CancellationTokenSource();
         _maintenance = Task.Run(() => MaintenanceLoopAsync(_cts.Token));
+
+        // Announces this server to LAN clients that probe for it. Opt-in, and a
+        // failure here (busy UDP port) never blocks the chat itself.
+        _discovery = new DiscoveryService(_cfg);
+        _discovery.Start();
 
         Log.Info("APP", $"public  http://{_cfg.Bind}:{PublicPort}/");
         if (AdminPort > 0) Log.Info("APP", $"admin   http://{_cfg.AdminBind}:{AdminPort}/admin");
@@ -588,6 +594,9 @@ public sealed class App : IAsyncDisposable
 
     public async Task StopAsync()
     {
+        try { _discovery?.Dispose(); } catch { }
+        _discovery = null;
+
         try { _cts?.Cancel(); } catch { }
 
         try { if (_maintenance != null) await _maintenance; }

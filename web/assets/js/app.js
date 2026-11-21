@@ -66,31 +66,66 @@ const App = (() => {
   }
 
   /**
-   * Turns whatever a person typed into a base URL. "192.168.1.10" becomes
-   * "http://192.168.1.10:6767", and a bare "http://host" keeps its default port.
+   * Turns whatever a person typed into a base URL.
+   *
+   * The parsing itself lives in serverurl.js so the settings window and this
+   * picker agree on every shape of input: "192.168.1.250", "192.168.1.250:6767",
+   * "http://192.168.1.250" and "http://192.168.1.250:6767" all resolve to the
+   * same canonical address instead of four different stored strings.
    */
   function normalizeServerUrl(input) {
-    let value = String(input || '').trim();
-    if (!value) return '';
-
-    if (!/^https?:\/\//i.test(value)) value = 'http://' + value;
-    value = value.replace(/\/+$/, '');
-
-    try {
-      const url = new URL(value);
-
-      // A LAN address without a port almost certainly means the default one.
-      if (!url.port) url.port = String(state.boot?.defaultPort || 6767);
-
-      return url.origin;
-    } catch {
-      return '';
-    }
+    const result = ServerUrl.normalize(input, state.boot?.defaultPort || ServerUrl.DEFAULT_PORT);
+    return result.ok ? result.url : '';
   }
 
   /** True when this page is served by the desktop shell rather than a browser. */
   function isDesktopShell() {
     return !!(window.chrome && window.chrome.webview && window.chrome.webview.postMessage);
+  }
+
+  /** Sends a command to the desktop shell; a no-op in a plain browser. */
+  function postToShell(message) {
+    if (!isDesktopShell()) return;
+    try {
+      window.chrome.webview.postMessage(message);
+    } catch { /* shell gone */ }
+  }
+
+  /** Messages from the desktop shell: open settings, theme changes, status. */
+  function listenToShell() {
+    if (!isDesktopShell()) return;
+
+    window.chrome.webview.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data || !data.type) return;
+
+      if (data.type === 'openSettings') {
+        // Store the config and let the route renderer do the work. No handshake,
+        // no "is the page ready yet": the hash decides what is on screen, and the
+        // hash is readable from the very first tick.
+        state.settingsConfig = data.config || {};
+        state.settingsConfigLoaded = true;
+        if (isSettingsRoute()) renderSettings();
+        return;
+      }
+
+      if (data.type === 'lanServers') {
+        renderLanServers(data.servers || []);
+        return;
+      }
+
+      if (data.type === 'closeSettings') {
+        closeSettingsRoute();
+      }
+
+      if (data.type === 'settingsSaved') {
+        toast('Настройки сохранены. Сервер перезапускается…', 'success', 4000);
+      }
+
+      if (data.type === 'theme') {
+        setTheme(data.theme === 'dark' ? 'dark' : 'light');
+      }
+    });
   }
 
   async function boot() {
@@ -240,12 +275,19 @@ const App = (() => {
         return;
       }
 
-      const url = normalizeServerUrl($('#picker-address').value);
+      const raw = $('#picker-address').value;
+      const normalized = ServerUrl.normalize(raw, state.boot?.defaultPort || ServerUrl.DEFAULT_PORT);
 
-      if (!url) {
-        setPickerStatus('Введите адрес, например 192.168.1.10:6767', 'error');
+      if (!normalized.ok) {
+        setPickerStatus(normalized.error, 'error');
         return;
       }
+
+      const url = normalized.url;
+
+      // Show the canonical form, so "192.168.1.250" visibly becomes
+      // "http://192.168.1.250:6767" before anything is saved.
+      $('#picker-address').value = url;
 
       setPickerStatus('Проверяю ' + url + '…', 'checking');
 
@@ -263,6 +305,11 @@ const App = (() => {
 
       setPickerStatus('Найден сервер «' + (probe.name || 'Kroshka') + '»', 'ok');
       writeTarget({ mode: 'remote', url });
+
+      // Let the desktop shell persist the choice too, so the next launch connects
+      // straight here instead of starting a local server first.
+      postToShell({ cmd: 'setServer', url });
+
       Api.setToken(null);
       await loadServer();
     } catch (err) {
@@ -317,6 +364,11 @@ const App = (() => {
     $('#picker').classList.add('hidden');
     $('#login').classList.remove('hidden');
     $('#app').classList.add('hidden');
+
+    // The route wins: a direct link to #settings must survive boot(), which
+    // always ends by showing one of these screens.
+    applyRoute();
+
     setTimeout(() => $('#login-nick').focus(), 60);
   }
 
@@ -328,6 +380,7 @@ const App = (() => {
     box.textContent = message;
     box.classList.remove('hidden');
     $('#login-submit').disabled = true;
+    applyRoute();
   }
 
   // ------------------------------------------------------------------- login
@@ -1973,7 +2026,235 @@ const App = (() => {
     try { return localStorage.getItem('kroshka.last'); } catch { return null; }
   }
 
-  // ------------------------------------------------------------------- drawer
+  // ------------------------------------------------------------------- routes
+
+  /**
+   * The whole "which screen is visible" question is answered by the URL hash.
+   *
+   *   #settings   settings
+   *   (anything)  the chat, which then decides between picker / login / app
+   *
+   * This replaced an overlay that the shell opened with a postMessage. That
+   * approach needed a handshake ("is the page listening yet?") and lost a race
+   * with boot(), which ends by showing the login screen and hid the panel again.
+   * A route has no such ordering: the renderer looks at the hash and draws the
+   * one screen that belongs there.
+   */
+  function currentRoute() {
+    return (location.hash || '').replace(/^#\/?/, '').toLowerCase();
+  }
+
+  function isSettingsRoute() {
+    return currentRoute() === 'settings';
+  }
+
+  function openSettingsRoute() {
+    if (isSettingsRoute()) {
+      // Already there: re-apply in case the caller has fresher config.
+      renderSettings();
+      return;
+    }
+
+    location.hash = '#settings';
+  }
+
+  function closeSettingsRoute() {
+    // Going "back" through history is wrong here: settings is a modal detour,
+    // not a place you navigated to from somewhere meaningful.
+    history.replaceState(null, '', location.pathname + location.search);
+    applyRoute();
+  }
+
+  /** Draws whatever the current route says should be on screen. */
+  function applyRoute() {
+    const route = currentRoute();
+
+    if (route === 'settings') {
+      renderSettings();
+    } else {
+      hideSettings();
+    }
+
+  }
+
+  function renderSettings() {
+    const config = state.settingsConfig || {};
+    const s = config;
+
+    // Ask the shell for fresh values. The page only renders; the shell owns the
+    // file. Asking here (rather than having the shell push) means the reply can
+    // only arrive at a listener that already exists.
+    if (isDesktopShell() && !state.settingsConfigLoaded) {
+      postToShell({ cmd: 'needSettings' });
+    }
+
+    const view = $('#settings-view');
+
+    $('#settings-url').value = s.serverUrl || '';
+    $('#settings-port').value = String(s.localPort || ServerUrl.DEFAULT_PORT);
+    $('#settings-close-to-tray').checked = s.closeToTray !== false;
+    $('#settings-notifications').checked = s.notifications !== false;
+    $('#settings-autostart').checked = !!s.startWithWindows;
+    $('#settings-version').textContent = s.version ? 'Kroshka ' + s.version : '';
+
+    settingsSelectMode(s.mode === 'remote' ? 'remote' : 'local');
+    settingsUpdateClear();
+    settingsNotice('', '');
+
+    $('#settings-view').classList.remove('hidden');
+    $('#drawer').classList.add('hidden');
+    $('#drawer-scrim').classList.add('hidden');
+
+  }
+
+  function hideSettings() {
+    $('#settings-view').classList.add('hidden');
+  }
+
+  function settingsSelectMode(mode) {
+    state.settingsMode = mode;
+    const local = mode === 'local';
+
+    $('#settings-mode-local').classList.toggle('selected', local);
+    $('#settings-mode-remote').classList.toggle('selected', !local);
+    $('#settings-mode-local').setAttribute('aria-checked', String(local));
+    $('#settings-mode-remote').setAttribute('aria-checked', String(!local));
+
+    $('#settings-address-field').classList.toggle('hidden', local);
+    $('#settings-port-field').classList.toggle('hidden', !local);
+
+    if (!local) setTimeout(() => $('#settings-url').focus(), 60);
+  }
+
+  function settingsUpdateClear() {
+    $('#settings-clear-url').classList.toggle('hidden', $('#settings-url').value.length === 0);
+  }
+
+  // --------------------------------------------------------- discovered servers
+
+  function scanLan() {
+    if (!isDesktopShell()) {
+      renderLanServers([]);
+      return;
+    }
+
+    const button = $('#settings-lan-scan');
+    button.disabled = true;
+    button.classList.add('scanning');
+
+    $('#settings-lan-empty').textContent = 'Ищу серверы в этой сети…';
+    $('#settings-lan-empty').classList.remove('hidden');
+
+    // Remove stale results so it is obvious the list is being rebuilt.
+    $$('#settings-lan-list .lan-server').forEach((node) => node.remove());
+
+    postToShell({ cmd: 'scanLan' });
+
+    // The shell replies with lanServers; this only un-sticks the button in case
+    // nothing answers at all.
+    setTimeout(() => {
+      button.disabled = false;
+      button.classList.remove('scanning');
+    }, 4000);
+  }
+
+  function renderLanServers(servers) {
+    const host = $('#settings-lan-list');
+    const empty = $('#settings-lan-empty');
+
+    $$('.lan-server', host).forEach((node) => node.remove());
+
+    if (!servers || servers.length === 0) {
+      empty.textContent = 'Ничего не нашлось. Проверьте, что сервер в той же сети и видимость включена.';
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+
+    for (const server of servers) {
+      const row = el('button', {
+        class: 'lan-server',
+        type: 'button',
+        title: 'Использовать ' + server.url,
+        onclick: () => {
+          $('#settings-url').value = server.url;
+          settingsUpdateClear();
+          settingsNotice('Выбран ' + (server.name || server.url), 'ok');
+        }
+      },
+        el('span', { class: 'lan-server-icon' },
+          el('i', { class: 'fa-solid fa-server' })),
+        el('span', { class: 'lan-server-body' },
+          el('span', { class: 'lan-server-name', text: server.name || 'Kroshka' }),
+          el('span', { class: 'lan-server-meta', text: server.host + ':' + server.port })),
+        el('span', { class: 'lan-server-pick', text: 'Выбрать' })
+      );
+
+      host.append(row);
+    }
+  }
+
+  function settingsNotice(text, kind) {
+    const node = $('#settings-notice');
+
+    if (!text) {
+      node.classList.add('hidden');
+      return;
+    }
+
+    node.className = 'settings-notice' + (kind ? ' ' + kind : '');
+    node.innerHTML = '';
+
+    const icon = kind === 'error' ? 'fa-circle-exclamation'
+               : kind === 'ok' ? 'fa-circle-check'
+               : 'fa-circle-info';
+
+    node.append(el('i', { class: 'fa-solid ' + icon }), el('span', { text }));
+    node.classList.remove('hidden');
+  }
+
+  function saveSettings() {
+    settingsNotice('', '');
+
+    const remote = state.settingsMode === 'remote';
+    const config = {
+      mode: remote ? 'remote' : 'local',
+      serverUrl: '',
+      localPort: Number($('#settings-port').value) || ServerUrl.DEFAULT_PORT,
+      closeToTray: $('#settings-close-to-tray').checked,
+      notifications: $('#settings-notifications').checked,
+      startWithWindows: $('#settings-autostart').checked
+    };
+
+    if (remote) {
+      const result = ServerUrl.normalize($('#settings-url').value, config.localPort);
+
+      if (!result.ok) {
+        settingsNotice(result.error, 'error');
+        $('#settings-url').focus();
+        return;
+      }
+
+      config.serverUrl = result.url;
+      $('#settings-url').value = result.url;
+    } else if (config.localPort < 1024 || config.localPort > 65535) {
+      settingsNotice('Порт должен быть от 1024 до 65535', 'error');
+      $('#settings-port').focus();
+      return;
+    }
+
+    if (!isDesktopShell()) {
+      settingsNotice(
+        'Эти настройки принадлежат приложению для Windows. В браузере они недоступны.',
+        'error');
+      return;
+    }
+
+    postToShell({ cmd: 'saveSettings', config });
+    closeSettingsRoute();
+    toast('Настройки сохранены', 'success');
+  }
 
   async function openDrawer() {
     $('#drawer').classList.remove('hidden');
@@ -2252,10 +2533,81 @@ const App = (() => {
       }
     });
 
+    // Live preview: show the canonical form as soon as the input is parseable,
+    // so "192.168.1.250" visibly resolves before the person presses anything.
+    $('#picker-address').addEventListener('input', () => {
+      const raw = $('#picker-address').value.trim();
+      if (!raw) {
+        $('#picker-status').classList.add('hidden');
+        return;
+      }
+
+      const result = ServerUrl.normalize(raw, state.boot?.defaultPort || ServerUrl.DEFAULT_PORT);
+      if (result.ok && result.url !== 'http://' + raw && result.url !== raw) {
+        setPickerStatus('Будет использовано: ' + result.url, 'ok');
+      } else {
+        $('#picker-status').classList.add('hidden');
+      }
+    });
+
     $('#btn-change-server').addEventListener('click', () => {
       closeDrawer();
       showPicker();
     });
+
+    // ---- settings panel (lives in this document)
+    $('#settings-close').addEventListener('click', closeSettingsRoute);
+    $('#settings-cancel').addEventListener('click', closeSettingsRoute);
+    $('#settings-save').addEventListener('click', saveSettings);
+
+    $('#settings-mode-local').addEventListener('click', () => settingsSelectMode('local'));
+    $('#settings-mode-remote').addEventListener('click', () => settingsSelectMode('remote'));
+
+    $('#settings-url').addEventListener('input', () => {
+      settingsUpdateClear();
+      settingsNotice('', '');
+    });
+
+    $('#settings-url').addEventListener('blur', () => {
+      const raw = $('#settings-url').value.trim();
+      if (!raw) return;
+
+      const result = ServerUrl.normalize(raw, Number($('#settings-port').value) || ServerUrl.DEFAULT_PORT);
+      if (result.ok) $('#settings-url').value = result.url;
+      settingsUpdateClear();
+    });
+
+    $('#settings-url').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        saveSettings();
+      }
+    });
+
+    $('#settings-clear-url').addEventListener('click', () => {
+      $('#settings-url').value = '';
+      settingsUpdateClear();
+      $('#settings-url').focus();
+    });
+
+    $('#settings-lan-scan').addEventListener('click', scanLan);
+
+    // Scan as soon as the remote mode is opened: typing an IP is exactly the
+    // friction this feature exists to remove.
+    $('#settings-mode-remote').addEventListener('click', () => {
+      settingsSelectMode('remote');
+      setTimeout(scanLan, 150);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !$('#settings-view').classList.contains('hidden')) {
+        event.preventDefault();
+        closeSettingsRoute();
+      }
+    });
+
+    // The route is the single source of truth for which screen is visible.
+    window.addEventListener('hashchange', applyRoute);
 
     $('#search-input').addEventListener('input', (event) => {
       const query = event.target.value.trim();
@@ -2504,15 +2856,23 @@ const App = (() => {
 
   function start() {
     bind();
-    boot().catch((err) => {
-      console.error(err);
-      showLoginFatal('Ошибка запуска: ' + (err?.message || err));
-    });
+    listenToShell();
+
+    // Announce readiness. The shell uses this to know the page can accept a
+    // postMessage; the route already decided what is on screen.
+    postToShell({ cmd: 'uiReady' });
+
+    boot()
+      .then(applyRoute)
+      .catch((err) => {
+        console.error(err);
+        showLoginFatal('Ошибка запуска: ' + (err?.message || err));
+      });
   }
 
   return {
     start, state, openConversation, sortedConversations, renderConversations, conversationRow,
-    showPicker, normalizeServerUrl
+    showPicker, normalizeServerUrl, openSettingsRoute, closeSettingsRoute
   };
 })();
 

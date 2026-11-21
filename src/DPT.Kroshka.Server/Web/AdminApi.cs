@@ -552,6 +552,7 @@ public sealed class AdminApi
                 ("limits", "maxUploadMb") => _cfg.MaxUploadMb.ToString(),
                 ("storage", "pruneMonths") => _cfg.PruneMonths.ToString(),
                 ("storage", "keepBackups") => _cfg.KeepBackups.ToString(),
+                ("server", "discoverable") => _cfg.Discoverable ? "true" : "false",
                 _ => ""
             };
 
